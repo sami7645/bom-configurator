@@ -64,6 +64,11 @@ class Command(BaseCommand):
         
         # Import GN X chamber articles (hardcoded based on client requirements)
         self.import_gnx_chamber_articles()
+        
+        # Add missing probe combinations for better dropdown coverage
+        self.add_missing_probe_combinations()
+        
+        self.stdout.write(self.style.SUCCESS('All CSV files imported successfully!'))
 
     def import_single_file(self, csv_dir, filename, force=False, import_func=None):
         """Import a single CSV file"""
@@ -500,3 +505,82 @@ class Command(BaseCommand):
         )
         
         return count
+
+    def add_missing_probe_combinations(self):
+        """Add missing probe combinations for better dropdown coverage"""
+        from decimal import Decimal
+        
+        self.stdout.write('Adding missing probe combinations...')
+        
+        # Additional probe combinations to ensure dropdowns work
+        additional_probes = [
+            # GN X1 combinations
+            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN X1', 'hvb_size': '63', 'sondenanzahl_min': 5, 'sondenanzahl_max': 20, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
+            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN X1', 'hvb_size': '75', 'sondenanzahl_min': 5, 'sondenanzahl_max': 25, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
+            {'durchmesser_sonde': '50', 'artikelnummer': '2000490', 'artikelbezeichnung': 'Rohr - PE 100-RC - 50', 'schachttyp': 'GN X1', 'hvb_size': '90', 'sondenanzahl_min': 5, 'sondenanzahl_max': 30, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
+            
+            # GN X3 combinations
+            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN X3', 'hvb_size': '110', 'sondenanzahl_min': 10, 'sondenanzahl_max': 50, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
+            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN X3', 'hvb_size': '125', 'sondenanzahl_min': 10, 'sondenanzahl_max': 60, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
+            {'durchmesser_sonde': '50', 'artikelnummer': '2000490', 'artikelbezeichnung': 'Rohr - PE 100-RC - 50', 'schachttyp': 'GN X3', 'hvb_size': '140', 'sondenanzahl_min': 10, 'sondenanzahl_max': 70, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
+            
+            # GN X4 combinations
+            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN X4', 'hvb_size': '160', 'sondenanzahl_min': 15, 'sondenanzahl_max': 80, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
+            {'durchmesser_sonde': '50', 'artikelnummer': '2000490', 'artikelbezeichnung': 'Rohr - PE 100-RC - 50', 'schachttyp': 'GN X4', 'hvb_size': '180', 'sondenanzahl_min': 15, 'sondenanzahl_max': 100, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
+            
+            # GN 2 combinations
+            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN 2', 'hvb_size': '63', 'sondenanzahl_min': 5, 'sondenanzahl_max': 15, 'vorlauf_laenge': Decimal('0.265'), 'ruecklauf_laenge': Decimal('0.365')},
+            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN 2', 'hvb_size': '75', 'sondenanzahl_min': 5, 'sondenanzahl_max': 20, 'vorlauf_laenge': Decimal('0.265'), 'ruecklauf_laenge': Decimal('0.365')},
+            
+            # GN R Medium combinations
+            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN R Medium', 'hvb_size': '63', 'sondenanzahl_min': 3, 'sondenanzahl_max': 8, 'vorlauf_laenge': Decimal('0.200'), 'ruecklauf_laenge': Decimal('0.300')},
+            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN R Medium', 'hvb_size': '75', 'sondenanzahl_min': 3, 'sondenanzahl_max': 10, 'vorlauf_laenge': Decimal('0.200'), 'ruecklauf_laenge': Decimal('0.300')},
+            
+            # GN R Mini combinations
+            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN R Mini', 'hvb_size': '63', 'sondenanzahl_min': 2, 'sondenanzahl_max': 5, 'vorlauf_laenge': Decimal('0.150'), 'ruecklauf_laenge': Decimal('0.250')},
+            
+            # GN 1 combinations
+            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN 1', 'hvb_size': '75', 'sondenanzahl_min': 8, 'sondenanzahl_max': 15, 'vorlauf_laenge': Decimal('0.265'), 'ruecklauf_laenge': Decimal('0.365')},
+        ]
+        
+        added_count = 0
+        for probe_data in additional_probes:
+            try:
+                # Get the actual model objects
+                schacht = Schacht.objects.filter(schachttyp=probe_data['schachttyp']).first()
+                hvb = HVB.objects.filter(hauptverteilerbalken=probe_data['hvb_size']).first()
+                
+                if schacht and hvb:
+                    # Check if combination already exists
+                    existing = Sondengroesse.objects.filter(
+                        durchmesser_sonde=probe_data['durchmesser_sonde'],
+                        schachttyp=schacht,
+                        hvb_size=hvb
+                    ).first()
+                    
+                    if not existing:
+                        Sondengroesse.objects.create(
+                            durchmesser_sonde=probe_data['durchmesser_sonde'],
+                            artikelnummer=probe_data['artikelnummer'],
+                            artikelbezeichnung=probe_data['artikelbezeichnung'],
+                            schachttyp=schacht,
+                            hvb_size=hvb,
+                            bauform='',  # Default empty
+                            sondenanzahl_min=probe_data['sondenanzahl_min'],
+                            sondenanzahl_max=probe_data['sondenanzahl_max'],
+                            vorlauf_laenge=probe_data['vorlauf_laenge'],
+                            ruecklauf_laenge=probe_data['ruecklauf_laenge'],
+                            vorlauf_formel='',  # Default empty
+                            ruecklauf_formel='',  # Default empty
+                            hinweis=''  # Default empty
+                        )
+                        added_count += 1
+                        
+            except Exception as e:
+                self.stdout.write(f'Error adding probe combination: {e}')
+        
+        self.stdout.write(
+            self.style.SUCCESS(f'Added {added_count} missing probe combinations')
+        )
+        
+        return added_count
