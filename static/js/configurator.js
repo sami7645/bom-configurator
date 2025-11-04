@@ -145,6 +145,13 @@ function performSondenOptionsRequest(schachttyp, hvbSize) {
             console.log('API response received:', data);
             console.log('Number of sonden_options:', data.sonden_options ? data.sonden_options.length : 0);
             
+            // Log debug info if available
+            if (data.debug) {
+                console.log('API Debug Info:', data.debug);
+                console.log('Received values:', data.debug.received);
+                console.log('Result count:', data.debug.count);
+            }
+            
             let options = '<option value="">Bitte wählen...</option>';
             
             if (data.sonden_options && data.sonden_options.length > 0) {
@@ -158,7 +165,14 @@ function performSondenOptionsRequest(schachttyp, hvbSize) {
                 console.log('Generated options HTML:', options);
             } else {
                 console.log('No sonden_options found in response');
-                options += '<option value="">Keine Optionen verfügbar</option>';
+                if (data.error) {
+                    console.error('API Error:', data.error);
+                    console.error('Received values:', data.received);
+                    options += `<option value="">Fehler: ${data.error}</option>`;
+                } else {
+                    options += '<option value="">Keine Optionen verfügbar</option>';
+                    console.warn('No options returned. Check server logs for details.');
+                }
             }
             
             $('#sondenDurchmesser').html(options);
