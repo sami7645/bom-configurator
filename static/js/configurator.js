@@ -100,10 +100,15 @@ function updateSondenOptions() {
     const schachttyp = $('#schachttyp').val();
     const hvbSize = $('#hvbSize').val();
     
+    console.log('updateSondenOptions called:', { schachttyp, hvbSize });
+    
     if (!schachttyp || !hvbSize) {
+        console.log('Missing schachttyp or hvbSize, showing placeholder');
         $('#sondenDurchmesser').html('<option value="">Erst Schachttyp und HVB wählen...</option>');
         return;
     }
+    
+    console.log('Making AJAX request to /api/sonden-options/');
     
     $.ajax({
         url: '/api/sonden-options/',
@@ -114,19 +119,31 @@ function updateSondenOptions() {
         }),
         contentType: 'application/json',
         success: function(data) {
+            console.log('API response received:', data);
+            console.log('Number of sonden_options:', data.sonden_options ? data.sonden_options.length : 0);
+            
             let options = '<option value="">Bitte wählen...</option>';
             
-            data.sonden_options.forEach(function(option) {
-                options += `<option value="${option.durchmesser_sonde}" 
-                           data-min="${option.sondenanzahl_min}" 
-                           data-max="${option.sondenanzahl_max}">
-                           ${option.durchmesser_sonde}mm - ${option.artikelbezeichnung}
-                           </option>`;
-            });
+            if (data.sonden_options && data.sonden_options.length > 0) {
+                data.sonden_options.forEach(function(option) {
+                    options += `<option value="${option.durchmesser_sonde}" 
+                               data-min="${option.sondenanzahl_min}" 
+                               data-max="${option.sondenanzahl_max}">
+                               ${option.durchmesser_sonde}mm - ${option.artikelbezeichnung}
+                               </option>`;
+                });
+                console.log('Generated options HTML:', options);
+            } else {
+                console.log('No sonden_options found in response');
+                options += '<option value="">Keine Optionen verfügbar</option>';
+            }
             
             $('#sondenDurchmesser').html(options);
+            console.log('Updated dropdown HTML');
         },
-        error: function() {
+        error: function(xhr, status, error) {
+            console.error('AJAX error:', { xhr, status, error });
+            console.error('Response text:', xhr.responseText);
             BOMConfigurator.showAlert('Fehler beim Laden der Sonden-Optionen.', 'danger');
         }
     });
