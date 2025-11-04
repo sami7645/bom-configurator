@@ -43,6 +43,15 @@ def get_sonden_options(request):
     schachttyp = data.get('schachttyp')
     hvb_size = data.get('hvb_size')
     
+    # Debug logging
+    print(f"DEBUG: Received request - schachttyp: '{schachttyp}', hvb_size: '{hvb_size}'")
+    print(f"DEBUG: schachttyp type: {type(schachttyp)}, hvb_size type: {type(hvb_size)}")
+    
+    # Check what's in the database
+    all_probes = Sondengroesse.objects.all()
+    print(f"DEBUG: Total probes in database: {all_probes.count()}")
+    
+    # Test the filter
     sonden_options = Sondengroesse.objects.filter(
         schachttyp=schachttyp,
         hvb=hvb_size
@@ -51,8 +60,23 @@ def get_sonden_options(request):
         'artikelnummer', 'artikelbezeichnung'
     ).distinct()
     
+    options_list = list(sonden_options)
+    print(f"DEBUG: Found {len(options_list)} matching options")
+    
+    if len(options_list) == 0:
+        # Debug: show similar matches
+        similar_schacht = Sondengroesse.objects.filter(schachttyp__icontains=schachttyp[:5] if schachttyp else '').values_list('schachttyp', flat=True).distinct()
+        similar_hvb = Sondengroesse.objects.filter(hvb=hvb_size).values_list('hvb', flat=True).distinct()
+        print(f"DEBUG: Similar schachttyp values: {list(similar_schacht)}")
+        print(f"DEBUG: HVB '{hvb_size}' exists: {list(similar_hvb)}")
+        
+        # Show first few probes for comparison
+        sample_probes = Sondengroesse.objects.all()[:5]
+        for probe in sample_probes:
+            print(f"DEBUG: Sample probe - schachttyp: '{probe.schachttyp}', hvb: '{probe.hvb}'")
+    
     return JsonResponse({
-        'sonden_options': list(sonden_options)
+        'sonden_options': options_list
     })
 
 
@@ -576,3 +600,14 @@ def debug_probes_endpoint(request):
             'error': str(e),
             'message': 'Failed to debug probe data'
         })
+
+
+@csrf_exempt
+@require_http_methods(["POST", "GET"])
+def test_endpoint(request):
+    """Simple test endpoint to verify AJAX is working"""
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Test endpoint is working!',
+        'method': request.method
+    })

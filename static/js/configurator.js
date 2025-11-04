@@ -118,6 +118,9 @@ function updateSondenOptions() {
             hvb_size: hvbSize
         }),
         contentType: 'application/json',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
         success: function(data) {
             console.log('API response received:', data);
             console.log('Number of sonden_options:', data.sonden_options ? data.sonden_options.length : 0);
@@ -480,8 +483,68 @@ function printBOM() {
     window.print();
 }
 
+// Manual test function for debugging
+function testSondenAPI() {
+    const schachttyp = $('#schachttyp').val();
+    const hvbSize = $('#hvbSize').val();
+    
+    console.log('=== MANUAL API TEST ===');
+    console.log('Schachttyp value:', schachttyp);
+    console.log('HVB Size value:', hvbSize);
+    console.log('Schachttyp type:', typeof schachttyp);
+    console.log('HVB Size type:', typeof hvbSize);
+    
+    if (!schachttyp || !hvbSize) {
+        alert('Please select both Schachttyp and HVB-Größe first!');
+        return;
+    }
+    
+    const requestData = {
+        schachttyp: schachttyp,
+        hvb_size: hvbSize
+    };
+    
+    console.log('Request data:', requestData);
+    console.log('Request JSON:', JSON.stringify(requestData));
+    
+    $.ajax({
+        url: '/api/sonden-options/',
+        method: 'POST',
+        data: JSON.stringify(requestData),
+        contentType: 'application/json',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        success: function(data) {
+            console.log('=== API SUCCESS ===');
+            console.log('Full response:', data);
+            console.log('Options count:', data.sonden_options ? data.sonden_options.length : 0);
+            
+            if (data.sonden_options && data.sonden_options.length > 0) {
+                console.log('Options received:');
+                data.sonden_options.forEach((option, index) => {
+                    console.log(`  ${index + 1}. ${option.durchmesser_sonde}mm - ${option.artikelbezeichnung}`);
+                });
+                alert(`SUCCESS! Received ${data.sonden_options.length} probe options. Check console for details.`);
+            } else {
+                console.log('No options in response');
+                alert('API returned empty options list. Check console for details.');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.log('=== API ERROR ===');
+            console.error('XHR:', xhr);
+            console.error('Status:', status);
+            console.error('Error:', error);
+            console.error('Response text:', xhr.responseText);
+            alert(`API Error: ${error}. Check console for details.`);
+        }
+    });
+}
+
 // Export functions for global use
 window.nextStep = nextStep;
 window.previousStep = previousStep;
 window.generateBOM = generateBOM;
 window.printBOM = printBOM;
+window.testSondenAPI = testSondenAPI;

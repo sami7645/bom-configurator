@@ -16,4 +16,5 @@ urlpatterns = [
     path('api/generate-bom/', views.generate_bom, name='generate_bom'),
     path('api/update-probes/', views.update_probes_endpoint, name='update_probes_endpoint'),
     path('api/debug-probes/', views.debug_probes_endpoint, name='debug_probes_endpoint'),
+    path('api/test/', views.test_endpoint, name='test_endpoint'),
 ]
