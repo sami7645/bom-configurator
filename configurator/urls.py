@@ -15,4 +15,5 @@ urlpatterns = [
     path('api/gnx-chamber-articles/', views.get_gnx_chamber_articles, name='get_gnx_chamber_articles'),
     path('api/generate-bom/', views.generate_bom, name='generate_bom'),
     path('api/update-probes/', views.update_probes_endpoint, name='update_probes_endpoint'),
+    path('api/debug-probes/', views.debug_probes_endpoint, name='debug_probes_endpoint'),
 ]

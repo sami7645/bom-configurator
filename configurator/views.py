@@ -516,3 +516,63 @@ def update_probes_endpoint(request):
             'error': str(e),
             'message': 'Failed to update probe combinations'
         })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def debug_probes_endpoint(request):
+    """Debug endpoint to check probe data in database"""
+    try:
+        from configurator.models import Sondengroesse, Schacht, HVB
+        
+        # Get counts
+        total_probes = Sondengroesse.objects.count()
+        total_schacht = Schacht.objects.count()
+        total_hvb = HVB.objects.count()
+        
+        # Get sample data
+        sample_probes = list(Sondengroesse.objects.all()[:10].values(
+            'durchmesser_sonde', 'schachttyp__schachttyp', 'hvb_size__hauptverteilerbalken',
+            'artikelnummer', 'artikelbezeichnung'
+        ))
+        
+        sample_schacht = list(Schacht.objects.all()[:5].values('schachttyp'))
+        sample_hvb = list(HVB.objects.all()[:5].values('hauptverteilerbalken'))
+        
+        # Test specific combinations
+        test_combinations = []
+        for schacht in ['GN X1', 'GN X3', 'GN 2']:
+            for hvb_size in ['63', '75', '90']:
+                probes = Sondengroesse.objects.filter(
+                    schachttyp__schachttyp=schacht,
+                    hvb_size__hauptverteilerbalken=hvb_size
+                ).values('durchmesser_sonde')
+                
+                test_combinations.append({
+                    'schacht': schacht,
+                    'hvb': hvb_size,
+                    'probe_count': probes.count(),
+                    'probes': list(probes)
+                })
+        
+        return JsonResponse({
+            'success': True,
+            'database_counts': {
+                'total_probes': total_probes,
+                'total_schacht': total_schacht,
+                'total_hvb': total_hvb
+            },
+            'sample_data': {
+                'probes': sample_probes,
+                'schacht': sample_schacht,
+                'hvb': sample_hvb
+            },
+            'test_combinations': test_combinations
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to debug probe data'
+        })
