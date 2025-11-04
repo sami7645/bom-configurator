@@ -1,2 +1,2 @@
-web: python manage.py migrate --settings=bom_configurator.settings_production && python manage.py import_csv_data --settings=bom_configurator.settings_production && python manage.py collectstatic --noinput --settings=bom_configurator.settings_production && gunicorn --env DJANGO_SETTINGS_MODULE=bom_configurator.settings_production bom_configurator.wsgi:application
-release: python manage.py migrate --settings=bom_configurator.settings_production && python manage.py import_csv_data --settings=bom_configurator.settings_production
+web: gunicorn --env DJANGO_SETTINGS_MODULE=bom_configurator.settings_production bom_configurator.wsgi:application
+release: python manage.py migrate --settings=bom_configurator.settings_production && python manage.py import_csv_data --settings=bom_configurator.settings_production && python manage.py collectstatic --noinput --settings=bom_configurator.settings_production
