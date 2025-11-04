@@ -546,35 +546,30 @@ class Command(BaseCommand):
         added_count = 0
         for probe_data in additional_probes:
             try:
-                # Get the actual model objects
-                schacht = Schacht.objects.filter(schachttyp=probe_data['schachttyp']).first()
-                hvb = HVB.objects.filter(hauptverteilerbalken=probe_data['hvb_size']).first()
+                # Check if combination already exists (using string fields, not foreign keys)
+                existing = Sondengroesse.objects.filter(
+                    durchmesser_sonde=probe_data['durchmesser_sonde'],
+                    schachttyp=probe_data['schachttyp'],
+                    hvb=probe_data['hvb_size']
+                ).first()
                 
-                if schacht and hvb:
-                    # Check if combination already exists
-                    existing = Sondengroesse.objects.filter(
+                if not existing:
+                    Sondengroesse.objects.create(
                         durchmesser_sonde=probe_data['durchmesser_sonde'],
-                        schachttyp=schacht,
-                        hvb_size=hvb
-                    ).first()
-                    
-                    if not existing:
-                        Sondengroesse.objects.create(
-                            durchmesser_sonde=probe_data['durchmesser_sonde'],
-                            artikelnummer=probe_data['artikelnummer'],
-                            artikelbezeichnung=probe_data['artikelbezeichnung'],
-                            schachttyp=schacht,
-                            hvb_size=hvb,
-                            bauform='',  # Default empty
-                            sondenanzahl_min=probe_data['sondenanzahl_min'],
-                            sondenanzahl_max=probe_data['sondenanzahl_max'],
-                            vorlauf_laenge=probe_data['vorlauf_laenge'],
-                            ruecklauf_laenge=probe_data['ruecklauf_laenge'],
-                            vorlauf_formel='',  # Default empty
-                            ruecklauf_formel='',  # Default empty
-                            hinweis=''  # Default empty
-                        )
-                        added_count += 1
+                        artikelnummer=probe_data['artikelnummer'],
+                        artikelbezeichnung=probe_data['artikelbezeichnung'],
+                        schachttyp=probe_data['schachttyp'],  # String field, not foreign key
+                        hvb=probe_data['hvb_size'],  # String field, not foreign key
+                        bauform='',  # Default empty
+                        sondenanzahl_min=probe_data['sondenanzahl_min'],
+                        sondenanzahl_max=probe_data['sondenanzahl_max'],
+                        vorlauf_laenge=probe_data['vorlauf_laenge'],
+                        ruecklauf_laenge=probe_data['ruecklauf_laenge'],
+                        vorlauf_formel='',  # Default empty
+                        ruecklauf_formel='',  # Default empty
+                        hinweis=''  # Default empty
+                    )
+                    added_count += 1
                         
             except Exception as e:
                 self.stdout.write(f'Error adding probe combination: {e}')
