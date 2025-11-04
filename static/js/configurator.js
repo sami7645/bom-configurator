@@ -101,6 +101,8 @@ function updateSondenOptions() {
     const hvbSize = $('#hvbSize').val();
     
     console.log('updateSondenOptions called:', { schachttyp, hvbSize });
+    console.log('updateSondenOptions - Schachttyp selected option:', $('#schachttyp option:selected').text());
+    console.log('updateSondenOptions - HVB selected option:', $('#hvbSize option:selected').text());
     
     if (!schachttyp || !hvbSize) {
         console.log('Missing schachttyp or hvbSize, showing placeholder');
@@ -493,6 +495,14 @@ function testSondenAPI() {
     console.log('HVB Size value:', hvbSize);
     console.log('Schachttyp type:', typeof schachttyp);
     console.log('HVB Size type:', typeof hvbSize);
+    
+    // Debug dropdown states
+    console.log('Schachttyp dropdown HTML:', $('#schachttyp')[0].outerHTML);
+    console.log('HVB dropdown HTML:', $('#hvbSize')[0].outerHTML);
+    console.log('Schachttyp selected index:', $('#schachttyp')[0].selectedIndex);
+    console.log('HVB selected index:', $('#hvbSize')[0].selectedIndex);
+    console.log('Schachttyp selected option:', $('#schachttyp option:selected').text());
+    console.log('HVB selected option:', $('#hvbSize option:selected').text());
     
     if (!schachttyp || !hvbSize) {
         alert('Please select both Schachttyp and HVB-Größe first!');

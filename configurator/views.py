@@ -46,6 +46,9 @@ def get_sonden_options(request):
     # Debug logging
     print(f"DEBUG: Received request - schachttyp: '{schachttyp}', hvb_size: '{hvb_size}'")
     print(f"DEBUG: schachttyp type: {type(schachttyp)}, hvb_size type: {type(hvb_size)}")
+    print(f"DEBUG: schachttyp repr: {repr(schachttyp)}, hvb_size repr: {repr(hvb_size)}")
+    print(f"DEBUG: Raw request body: {request.body}")
+    print(f"DEBUG: Parsed data: {data}")
     
     # Check what's in the database
     all_probes = Sondengroesse.objects.all()

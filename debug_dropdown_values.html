@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Dropdown Values</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Debug Dropdown Values</h1>
+    
+    <div>
+        <label>Schachttyp:</label>
+        <select id="schachttyp">
+            <option value="">Select...</option>
+            <option value="GN R Kompakt">GN R Kompakt</option>
+            <option value="GN X1">GN X1</option>
+        </select>
+        <span id="schachttyp-value"></span>
+    </div>
+    
+    <div>
+        <label>HVB Size:</label>
+        <select id="hvbSize">
+            <option value="">Select...</option>
+            <option value="63">63mm</option>
+            <option value="75">75mm</option>
+            <option value="280">280mm</option>
+        </select>
+        <span id="hvbSize-value"></span>
+    </div>
+    
+    <button onclick="debugValues()">Debug Values</button>
+    
+    <script>
+    function debugValues() {
+        const schachttyp = $('#schachttyp').val();
+        const hvbSize = $('#hvbSize').val();
+        
+        $('#schachttyp-value').text(`Value: "${schachttyp}"`);
+        $('#hvbSize-value').text(`Value: "${hvbSize}"`);
+        
+        console.log('Schachttyp:', schachttyp);
+        console.log('HVB Size:', hvbSize);
+        
+        alert(`Schachttyp: "${schachttyp}"\nHVB Size: "${hvbSize}"`);
+    }
+    
+    $('#schachttyp, #hvbSize').on('change', debugValues);
+    </script>
+</body>
+</html>
