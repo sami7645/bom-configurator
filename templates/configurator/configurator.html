@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}BOM Konfigurator{% endblock %}
+
+{% block extra_css %}
+<style>
+    .step-indicator {
+        counter-reset: step-counter;
+    }
+    
+    .step-indicator .step {
+        counter-increment: step-counter;
+    }
+    
+    .step-indicator .step::before {
+        content: counter(step-counter);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Progress Steps -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="progress-steps step-indicator">
+                <div class="step active" id="step-1"></div>
+                <div class="step" id="step-2"></div>
+                <div class="step" id="step-3"></div>
+                <div class="step" id="step-4"></div>
+                <div class="step" id="step-5"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-2">
+                <small class="text-muted">Schachttyp</small>
+                <small class="text-muted">HVB & Sonden</small>
+                <small class="text-muted">Konfiguration</small>
+                <small class="text-muted">Prüfung</small>
+                <small class="text-muted">BOM</small>
+            </div>
+        </div>
+    </div>
+
+    <form id="bomConfigForm">
+        {% csrf_token %}
+        
+        <!-- Step 1: Basic Configuration -->
+        <div class="config-step" id="config-step-1">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-layer-group me-2"></i>Schritt 1: Grundkonfiguration</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="configName" class="form-label">Konfigurationsname</label>
+                                    <input type="text" class="form-control" id="configName" name="configuration_name" 
+                                           placeholder="z.B. Projekt ABC - Konfiguration 1" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="schachttyp" class="form-label">Schachttyp</label>
+                                    <select class="form-select" id="schachttyp" name="schachttyp" required>
+                                        <option value="">Bitte wählen...</option>
+                                        {% for schacht in schacht_types %}
+                                            <option value="{{ schacht.schachttyp }}">{{ schacht.schachttyp }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="hvbSize" class="form-label">HVB-Größe (mm)</label>
+                                    <select class="form-select" id="hvbSize" name="hvb_size" required>
+                                        <option value="">Bitte wählen...</option>
+                                        {% for hvb in hvb_sizes %}
+                                            <option value="{{ hvb.hauptverteilerbalken }}">{{ hvb.hauptverteilerbalken }}mm</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="anschlussart" class="form-label">Anschlussart</label>
+                                    <select class="form-select" id="anschlussart" name="anschlussart" required>
+                                        <option value="">Bitte wählen...</option>
+                                        <option value="einseitig">Einseitig</option>
+                                        <option value="beidseitig">Beidseitig</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="text-end">
+                                <button type="button" class="btn btn-primary" onclick="nextStep(2)">
+                                    Weiter <i class="fas fa-arrow-right ms-2"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Probe Configuration -->
+        <div class="config-step d-none" id="config-step-2">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-ruler me-2"></i>Schritt 2: Sonden-Konfiguration</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="sondenDurchmesser" class="form-label">Sonden-Durchmesser</label>
+                                    <select class="form-select" id="sondenDurchmesser" name="sonden_durchmesser" required>
+                                        <option value="">Erst Schachttyp und HVB wählen...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="sondenanzahl" class="form-label">Anzahl Sonden</label>
+                                    <input type="number" class="form-control" id="sondenanzahl" name="sondenanzahl" 
+                                           min="1" max="100" required>
+                                    <div class="form-text">
+                                        <span id="sondenanzahlRange"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="sondenabstand" class="form-label">Sondenabstand (mm)</label>
+                                    <select class="form-select" id="sondenabstand" name="sondenabstand" required>
+                                        <option value="">Erst Anschlussart wählen...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Zuschläge</label>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <input type="number" class="form-control" id="zuschlagLinks" 
+                                                   name="zuschlag_links" placeholder="Links (mm)" value="100">
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="number" class="form-control" id="zuschlagRechts" 
+                                                   name="zuschlag_rechts" placeholder="Rechts (mm)" value="100">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-end">
+                                <button type="button" class="btn btn-outline-secondary me-2" onclick="previousStep(1)">
+                                    <i class="fas fa-arrow-left me-2"></i>Zurück
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="nextStep(3)">
+                                    Weiter <i class="fas fa-arrow-right ms-2"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Additional Components -->
+        <div class="config-step d-none" id="config-step-3">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-plus-circle me-2"></i>Schritt 3: Zusätzliche Komponenten</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="kugelhahnType" class="form-label">Kugelhahn-Typ (optional)</label>
+                                    <select class="form-select" id="kugelhahnType" name="kugelhahn_type">
+                                        <option value="">Keinen auswählen</option>
+                                        {% for kugelhahn in kugelhahn_types %}
+                                            <option value="{{ kugelhahn.kugelhahn }}">{{ kugelhahn.kugelhahn }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="dfmType" class="form-label">Durchflussmesser-Typ (optional)</label>
+                                    <select class="form-select" id="dfmType" name="dfm_type">
+                                        <option value="">Keinen auswählen</option>
+                                        {% for dfm in dfm_types %}
+                                            <option value="{{ dfm.durchflussarmatur }}">{{ dfm.durchflussarmatur }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- GN X Chamber Articles (will be shown dynamically) -->
+                            <div id="gnxChamberSection" class="d-none">
+                                <hr>
+                                <h6><i class="fas fa-cube me-2"></i>GN X Kammer - Zusatzartikel</h6>
+                                <p class="text-muted">
+                                    Basierend auf der HVB-Größe werden automatisch passende Artikel ausgewählt. 
+                                    Sie können die Mengen anpassen.
+                                </p>
+                                <div id="gnxArticlesList"></div>
+                            </div>
+                            
+                            <div class="text-end">
+                                <button type="button" class="btn btn-outline-secondary me-2" onclick="previousStep(2)">
+                                    <i class="fas fa-arrow-left me-2"></i>Zurück
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="nextStep(4)">
+                                    Weiter <i class="fas fa-arrow-right ms-2"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Configuration Check -->
+        <div class="config-step d-none" id="config-step-4">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-search me-2"></i>Schritt 4: Konfiguration prüfen</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="configurationCheck">
+                                <div class="text-center">
+                                    <div class="loading-spinner"></div>
+                                    <p class="mt-2">Prüfe Konfiguration...</p>
+                                </div>
+                            </div>
+                            
+                            <div id="configurationSummary" class="d-none">
+                                <h6>Konfigurationsübersicht</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <tbody id="configSummaryTable">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div id="articleNumberSection" class="d-none">
+                                <hr>
+                                <h6>Artikelnummer-Verwaltung</h6>
+                                <div id="articleNumberContent"></div>
+                            </div>
+                            
+                            <div class="text-end">
+                                <button type="button" class="btn btn-outline-secondary me-2" onclick="previousStep(3)">
+                                    <i class="fas fa-arrow-left me-2"></i>Zurück
+                                </button>
+                                <button type="button" class="btn btn-success" id="generateBomBtn" onclick="generateBOM()" disabled>
+                                    <i class="fas fa-magic me-2"></i>BOM generieren
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: BOM Result -->
+        <div class="config-step d-none" id="config-step-5">
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-list-alt me-2"></i>Schritt 5: Generierte BOM</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="bomResult">
+                                <div class="text-center">
+                                    <div class="loading-spinner"></div>
+                                    <p class="mt-2">Generiere BOM...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/configurator.js' %}"></script>
+{% endblock %}

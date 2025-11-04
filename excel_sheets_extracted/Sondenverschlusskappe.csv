@@ -1,0 +1,9 @@
+﻿Sondenverschlusskappe,Sonden-DA (optional),Artikelnummer,Artikelbezeichnung,Menge Statisch,Menge Formel
+25,,2000551,Sondenverschlusskappe DA 25,,=sondenanzahl*2
+32,,2000552,Sondenverschlusskappe DA 32,,=sondenanzahl*2
+40,,2000553,Sondenverschlusskappe DA 40,,=sondenanzahl*2
+50,,2000554,Sondenverschlusskappe DA 50,,=sondenanzahl*2
+63,,2000555,Sondenverschlusskappe DA 63,,=sondenanzahl*2
+75,,2000556,Sondenverschlusskappe DA 75,,=sondenanzahl*2
+90,,2000557,Sondenverschlusskappe DA 90,,=sondenanzahl*2
+110,,2000550,Sondenverschlusskappe DA 110,,=sondenanzahl*2

@@ -1,0 +1,11 @@
+﻿Compat-HVB,Compat-WP,Compat-Sonden-DA,Compat-Sondenanzahl-min,Compat-Sondenanzahl-max,Compat-Sondenabstand,Compat-Bauform,Compat-Hauptabsperrung,Schachttyp,Hinweis
+,,,2,2,100,,Nein,GN R Nano,
+,,,2,3,100,,Nein,GN R Mini,
+,,,3,3,100,,Nein,GN R Mini,
+,,,6,6,100,,Nein,GN R Kompakt,
+,,,8,8,100,,Nein,GN R Medium,
+110.0,,50.0,11,16,125,,,GN 2|GN X1|GN X2|GN X3|GN X4,
+,,,15,15,100,,Nein,GN 1,
+,,,16,16,100,,Nein,GN 1,
+,,,23,23,100,,Nein,GN 2,
+,,,24,24,100,,Nein,GN 2,

@@ -1,0 +1,315 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ configuration.name }} - BOM Konfigurator{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'index' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'configuration_list' %}">Konfigurationen</a></li>
+                    <li class="breadcrumb-item active">{{ configuration.name }}</li>
+                </ol>
+            </nav>
+            <h2><i class="fas fa-eye me-2"></i>{{ configuration.name }}</h2>
+            <p class="text-muted">Erstellt am {{ configuration.created_at|date:"d.m.Y H:i" }}</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="window.print()">
+                    <i class="fas fa-print me-2"></i>Drucken
+                </button>
+                <a href="{% url 'delete_configuration' configuration.id %}" 
+                   class="btn btn-outline-danger"
+                   onclick="return confirm('Sind Sie sicher, dass Sie diese Konfiguration löschen möchten?')">
+                    <i class="fas fa-trash me-2"></i>Löschen
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Details -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle me-2"></i>Konfigurationsdetails</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless table-sm">
+                                <tr>
+                                    <td><strong>Schachttyp:</strong></td>
+                                    <td><span class="badge bg-primary">{{ configuration.schachttyp }}</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>HVB-Größe:</strong></td>
+                                    <td>{{ configuration.hvb_size }}mm</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Sonden-Durchmesser:</strong></td>
+                                    <td>{{ configuration.sonden_durchmesser }}mm</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Anzahl Sonden:</strong></td>
+                                    <td>{{ configuration.sondenanzahl }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Sondenabstand:</strong></td>
+                                    <td>{{ configuration.sondenabstand }}mm</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless table-sm">
+                                <tr>
+                                    <td><strong>Anschlussart:</strong></td>
+                                    <td>{{ configuration.anschlussart|capfirst }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Zuschlag links:</strong></td>
+                                    <td>{{ configuration.zuschlag_links }}mm</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Zuschlag rechts:</strong></td>
+                                    <td>{{ configuration.zuschlag_rechts }}mm</td>
+                                </tr>
+                                {% if configuration.kugelhahn_type %}
+                                <tr>
+                                    <td><strong>Kugelhahn-Typ:</strong></td>
+                                    <td><span class="badge bg-info">{{ configuration.kugelhahn_type }}</span></td>
+                                </tr>
+                                {% endif %}
+                                {% if configuration.dfm_type %}
+                                <tr>
+                                    <td><strong>DFM-Typ:</strong></td>
+                                    <td><span class="badge bg-warning">{{ configuration.dfm_type }}</span></td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-barcode me-2"></i>Artikelnummer</h5>
+                </div>
+                <div class="card-body">
+                    {% if configuration.full_article_number %}
+                        <div class="text-center">
+                            <h4><code>{{ configuration.full_article_number }}</code></h4>
+                            <span class="status-badge status-existing">Vollständige Artikelnummer</span>
+                        </div>
+                    {% elif configuration.mother_article_number %}
+                        <div class="text-center">
+                            <h5><code>{{ configuration.mother_article_number }}</code></h5>
+                            <span class="status-badge status-mother">Mutterartikel</span>
+                            {% if configuration.child_article_number %}
+                                <hr>
+                                <h6><code>{{ configuration.child_article_number }}</code></h6>
+                                <small class="text-muted">Kindartikelnummer</small>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="text-center">
+                            <div class="text-muted">
+                                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                                <p>Keine Artikelnummer zugewiesen</p>
+                            </div>
+                            <span class="status-badge status-new">Neue Konfiguration</span>
+                        </div>
+                    {% endif %}
+                    
+                    <hr>
+                    <small class="text-muted">
+                        <strong>Status:</strong><br>
+                        {% if configuration.is_existing_configuration %}
+                            <i class="fas fa-check-circle text-success me-1"></i>Bestehende Konfiguration
+                        {% elif configuration.is_existing_mother_article %}
+                            <i class="fas fa-exclamation-triangle text-warning me-1"></i>Mutterartikel vorhanden
+                        {% else %}
+                            <i class="fas fa-plus-circle text-info me-1"></i>Neue Konfiguration
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GN X Chamber Articles (if applicable) -->
+    {% if gnx_configurations %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-cube me-2"></i>GN X Kammer - Zusatzartikel</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Artikelnummer</th>
+                                    <th>Artikelbezeichnung</th>
+                                    <th>Menge</th>
+                                    <th>HVB-Bereich</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for gnx_config in gnx_configurations %}
+                                <tr>
+                                    <td><code>{{ gnx_config.gnx_article.artikelnummer }}</code></td>
+                                    <td>{{ gnx_config.gnx_article.artikelbezeichnung }}</td>
+                                    <td><strong>{{ gnx_config.custom_quantity }}</strong></td>
+                                    <td>{{ gnx_config.gnx_article.hvb_size_min }}-{{ gnx_config.gnx_article.hvb_size_max }}mm</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- BOM Items -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5><i class="fas fa-list-alt me-2"></i>Stückliste ({{ bom_items.count }} Positionen)</h5>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportBOM()">
+                            <i class="fas fa-download me-1"></i>Export
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    {% if bom_items %}
+                    <div class="bom-table">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px;">Pos.</th>
+                                    <th>Artikelnummer</th>
+                                    <th>Artikelbezeichnung</th>
+                                    <th style="width: 120px;">Menge</th>
+                                    <th style="width: 120px;">Quelle</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in bom_items %}
+                                <tr>
+                                    <td class="text-center">{{ forloop.counter }}</td>
+                                    <td><code>{{ item.artikelnummer }}</code></td>
+                                    <td>{{ item.artikelbezeichnung }}</td>
+                                    <td class="text-end">
+                                        <strong>{{ item.menge|floatformat:3 }}</strong>
+                                        {% if item.calculated_quantity %}
+                                            <br><small class="text-muted">(berechnet: {{ item.calculated_quantity|floatformat:3 }})</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ item.source_table }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <div class="text-muted">
+                            <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                            <p>Keine BOM-Positionen vorhanden</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-info me-2"></i>Metadaten</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <small class="text-muted">
+                                <strong>Erstellt:</strong><br>
+                                {{ configuration.created_at|date:"d.m.Y H:i:s" }}
+                            </small>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">
+                                <strong>Zuletzt geändert:</strong><br>
+                                {{ configuration.updated_at|date:"d.m.Y H:i:s" }}
+                            </small>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">
+                                <strong>Konfiguration-ID:</strong><br>
+                                {{ configuration.id }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function exportBOM() {
+    // Simple CSV export functionality
+    const table = document.querySelector('.bom-table table');
+    let csv = [];
+    
+    // Headers
+    const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+    csv.push(headers.join(';'));
+    
+    // Rows
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cells = Array.from(row.querySelectorAll('td')).map(td => {
+            // Clean up cell content
+            let text = td.textContent.trim();
+            // Remove line breaks and extra spaces
+            text = text.replace(/\s+/g, ' ');
+            return `"${text}"`;
+        });
+        csv.push(cells.join(';'));
+    });
+    
+    // Download
+    const csvContent = csv.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `BOM_{{ configuration.name|slugify }}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - BOM Konfigurator{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Hero Section -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card bg-engineering text-white">
+                <div class="card-body text-center py-5">
+                    <h1 class="display-4 fw-bold mb-3">
+                        <i class="fas fa-cogs me-3"></i>
+                        BOM Konfigurator
+                    </h1>
+                    <p class="lead mb-4">
+                        Professionelle Stücklisten-Konfiguration für technische Präzision
+                    </p>
+                    <a href="{% url 'configurator' %}" class="btn btn-light btn-lg">
+                        <i class="fas fa-play me-2"></i>
+                        Neue Konfiguration starten
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-5">
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="display-6 text-primary mb-2">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <h5 class="card-title">{{ schacht_types.count }}</h5>
+                    <p class="card-text text-muted">Schachttypen</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="display-6 text-success mb-2">
+                        <i class="fas fa-ruler-horizontal"></i>
+                    </div>
+                    <h5 class="card-title">{{ hvb_sizes.count }}</h5>
+                    <p class="card-text text-muted">HVB Größen</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="display-6 text-warning mb-2">
+                        <i class="fas fa-list-alt"></i>
+                    </div>
+                    <h5 class="card-title">{{ recent_configurations.count }}</h5>
+                    <p class="card-text text-muted">Letzte Konfigurationen</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="display-6 text-info mb-2">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h5 class="card-title">100%</h5>
+                    <p class="card-text text-muted">Genauigkeit</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Actions -->
+    <div class="row mb-5">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="fas fa-plus-circle me-2"></i>Neue Konfiguration</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Erstellen Sie eine neue BOM-Konfiguration mit unserem 
+                        intuitiven Schritt-für-Schritt-Assistenten.
+                    </p>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>Schachttyp auswählen</li>
+                        <li><i class="fas fa-check text-success me-2"></i>HVB-Größe definieren</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Sonden konfigurieren</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Automatische BOM-Generierung</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'configurator' %}" class="btn btn-primary w-100">
+                        <i class="fas fa-wrench me-2"></i>Konfigurator starten
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="fas fa-history me-2"></i>Bestehende Konfigurationen</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Verwalten Sie Ihre gespeicherten Konfigurationen, 
+                        bearbeiten Sie Details oder erstellen Sie Varianten.
+                    </p>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>Alle Konfigurationen anzeigen</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Details bearbeiten</li>
+                        <li><i class="fas fa-check text-success me-2"></i>BOM exportieren</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Varianten erstellen</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'configuration_list' %}" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-list me-2"></i>Konfigurationen anzeigen
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="fas fa-cog me-2"></i>Administration</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Verwalten Sie CSV-Daten, Artikelstammdaten und 
+                        Systemeinstellungen über das Admin-Interface.
+                    </p>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>CSV-Daten importieren</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Artikelstamm verwalten</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Systemeinstellungen</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Datenbank-Backup</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="/admin/" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-user-cog me-2"></i>Admin-Bereich
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Configurations -->
+    {% if recent_configurations %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-clock me-2"></i>Letzte Konfigurationen</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Schachttyp</th>
+                                    <th>HVB-Größe</th>
+                                    <th>Sonden</th>
+                                    <th>Erstellt</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for config in recent_configurations %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ config.name }}</strong>
+                                        {% if config.full_article_number %}
+                                            <br><small class="text-muted">{{ config.full_article_number }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ config.schachttyp }}</td>
+                                    <td>{{ config.hvb_size }}mm</td>
+                                    <td>
+                                        {{ config.sondenanzahl }}x {{ config.sonden_durchmesser }}mm
+                                        <br><small class="text-muted">{{ config.sondenabstand }}mm Abstand</small>
+                                    </td>
+                                    <td>
+                                        {{ config.created_at|date:"d.m.Y H:i" }}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'view_configuration' config.id %}" 
+                                           class="btn btn-sm btn-outline-primary" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Konfiguration anzeigen">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {% if recent_configurations.count >= 5 %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'configuration_list' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-list me-2"></i>Alle Konfigurationen anzeigen
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Features Section -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-star me-2"></i>Funktionen & Vorteile</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <h6><i class="fas fa-magic text-primary me-2"></i>Automatische BOM-Generierung</h6>
+                            <p class="text-muted">
+                                Intelligente Berechnung aller erforderlichen Komponenten basierend auf 
+                                Ihrer Konfiguration und den hinterlegten Formeln.
+                            </p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6><i class="fas fa-sync text-success me-2"></i>Dynamische CSV-Integration</h6>
+                            <p class="text-muted">
+                                Automatische Synchronisation mit CSV-Dateien - Änderungen werden 
+                                sofort in der Benutzeroberfläche reflektiert.
+                            </p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6><i class="fas fa-search text-warning me-2"></i>Intelligente Artikelsuche</h6>
+                            <p class="text-muted">
+                                Erkennung bestehender Konfigurationen und Mutterartikel mit 
+                                automatischer Kindnummer-Generierung.
+                            </p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6><i class="fas fa-tools text-info me-2"></i>GN X Kammer-Spezialbehandlung</h6>
+                            <p class="text-muted">
+                                Spezielle Behandlung für GN X Kammern mit HVB-größenabhängigen 
+                                Zusatzartikeln und benutzerdefinierten Mengen.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
