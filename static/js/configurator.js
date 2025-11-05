@@ -97,34 +97,34 @@ function previousStep(step) {
 }
 
 function updateSondenOptions() {
-    // Add a small delay to ensure dropdown values are properly updated
-    setTimeout(() => {
-        const schachttyp = $('#schachttyp').val();
-        const hvbSize = $('#hvbSize').val();
-        
-        console.log('updateSondenOptions called:', { schachttyp, hvbSize });
-        console.log('updateSondenOptions - Schachttyp selected option:', $('#schachttyp option:selected').text());
-        console.log('updateSondenOptions - HVB selected option:', $('#hvbSize option:selected').text());
-        
-        // Double-check the values by re-reading them
-        const schachttypCheck = document.getElementById('schachttyp').value;
-        const hvbSizeCheck = document.getElementById('hvbSize').value;
-        console.log('Double-check values:', { schachttypCheck, hvbSizeCheck });
-        
-        // Use the double-checked values
-        const finalSchachttyp = schachttypCheck || schachttyp;
-        const finalHvbSize = hvbSizeCheck || hvbSize;
-        
-        if (!finalSchachttyp || !finalHvbSize) {
-            console.log('Missing schachttyp or hvbSize, showing placeholder');
-            $('#sondenDurchmesser').html('<option value="">Erst Schachttyp und HVB wählen...</option>');
-            return;
-        }
-        
-        console.log('Final values being sent:', { finalSchachttyp, finalHvbSize });
-        
-        performSondenOptionsRequest(finalSchachttyp, finalHvbSize);
-    }, 100); // 100ms delay to ensure DOM is updated
+    // Get values directly from DOM elements (most reliable)
+    const schachttypElement = document.getElementById('schachttyp');
+    const hvbSizeElement = document.getElementById('hvbSize');
+    
+    const schachttyp = schachttypElement ? schachttypElement.value : '';
+    const hvbSize = hvbSizeElement ? hvbSizeElement.value : '';
+    
+    console.log('updateSondenOptions called');
+    console.log('Schachttyp element:', schachttypElement);
+    console.log('HVB element:', hvbSizeElement);
+    console.log('Schachttyp value:', schachttyp);
+    console.log('HVB Size value:', hvbSize);
+    console.log('Schachttyp selected option text:', schachttypElement ? schachttypElement.options[schachttypElement.selectedIndex]?.text : 'N/A');
+    console.log('HVB selected option text:', hvbSizeElement ? hvbSizeElement.options[hvbSizeElement.selectedIndex]?.text : 'N/A');
+    
+    if (!schachttyp || !hvbSize) {
+        console.log('Missing schachttyp or hvbSize, showing placeholder');
+        $('#sondenDurchmesser').html('<option value="">Erst Schachttyp und HVB wählen...</option>');
+        return;
+    }
+    
+    // Trim whitespace
+    const cleanSchachttyp = schachttyp.trim();
+    const cleanHvbSize = hvbSize.trim();
+    
+    console.log('Clean values:', { cleanSchachttyp, cleanHvbSize });
+    
+    performSondenOptionsRequest(cleanSchachttyp, cleanHvbSize);
 }
 
 function performSondenOptionsRequest(schachttyp, hvbSize) {

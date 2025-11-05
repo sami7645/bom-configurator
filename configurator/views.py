@@ -39,84 +39,91 @@ def configurator(request):
 @require_http_methods(["POST"])
 def get_sonden_options(request):
     """Get probe options based on selected shaft type and HVB"""
-    data = json.loads(request.body)
-    schachttyp = data.get('schachttyp')
-    hvb_size = data.get('hvb_size')
-    
-    # Debug logging
-    print(f"DEBUG: Received request - schachttyp: '{schachttyp}', hvb_size: '{hvb_size}'")
-    print(f"DEBUG: schachttyp type: {type(schachttyp)}, hvb_size type: {type(hvb_size)}")
-    print(f"DEBUG: schachttyp repr: {repr(schachttyp)}, hvb_size repr: {repr(hvb_size)}")
-    print(f"DEBUG: Raw request body: {request.body}")
-    print(f"DEBUG: Parsed data: {data}")
-    
-    # Check if values are None or empty
-    if not schachttyp or not hvb_size:
-        print(f"DEBUG: Missing values - schachttyp: {schachttyp}, hvb_size: {hvb_size}")
-        return JsonResponse({
-            'sonden_options': [],
-            'error': 'Missing schachttyp or hvb_size',
-            'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size}
-        })
-    
-    # Try to find exact match first
-    sonden_options = Sondengroesse.objects.filter(
-        schachttyp=schachttyp,
-        hvb=hvb_size
-    )
-    
-    print(f"DEBUG: Query filter - schachttyp='{schachttyp}', hvb='{hvb_size}'")
-    print(f"DEBUG: Query SQL: {sonden_options.query}")
-    print(f"DEBUG: Found {sonden_options.count()} probes with exact match")
-    
-    # If no exact match, try to find similar matches for debugging
-    if sonden_options.count() == 0:
-        print(f"DEBUG: No exact match found. Searching for similar...")
+    try:
+        data = json.loads(request.body)
+        schachttyp = data.get('schachttyp', '').strip() if data.get('schachttyp') else ''
+        hvb_size = data.get('hvb_size', '').strip() if data.get('hvb_size') else ''
         
-        # Try case-insensitive match
+        # Debug logging
+        print(f"DEBUG: Received request - schachttyp: '{schachttyp}', hvb_size: '{hvb_size}'")
+        print(f"DEBUG: schachttyp type: {type(schachttyp)}, hvb_size type: {type(hvb_size)}")
+        print(f"DEBUG: schachttyp repr: {repr(schachttyp)}, hvb_size repr: {repr(hvb_size)}")
+        
+        # Check if values are None or empty
+        if not schachttyp or not hvb_size:
+            print(f"DEBUG: Missing values - schachttyp: '{schachttyp}', hvb_size: '{hvb_size}'")
+            return JsonResponse({
+                'sonden_options': [],
+                'error': 'Missing schachttyp or hvb_size',
+                'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size}
+            })
+        
+        # Try exact match first
         sonden_options = Sondengroesse.objects.filter(
-            schachttyp__iexact=schachttyp,
+            schachttyp=schachttyp,
             hvb=hvb_size
         )
-        print(f"DEBUG: Case-insensitive match found: {sonden_options.count()}")
         
+        print(f"DEBUG: Query filter - schachttyp='{schachttyp}', hvb='{hvb_size}'")
+        print(f"DEBUG: Found {sonden_options.count()} probes with exact match")
+        
+        # If no exact match, try to find similar matches for debugging
         if sonden_options.count() == 0:
-            # Try stripping whitespace
+            print(f"DEBUG: No exact match found. Searching for similar...")
+            
+            # Try case-insensitive match
             sonden_options = Sondengroesse.objects.filter(
-                schachttyp__iexact=schachttyp.strip() if schachttyp else '',
-                hvb=hvb_size.strip() if hvb_size else ''
+                schachttyp__iexact=schachttyp,
+                hvb=hvb_size
             )
-            print(f"DEBUG: Trimmed match found: {sonden_options.count()}")
+            print(f"DEBUG: Case-insensitive match found: {sonden_options.count()}")
+            
+            if sonden_options.count() == 0:
+                # Try stripping whitespace
+                sonden_options = Sondengroesse.objects.filter(
+                    schachttyp__iexact=schachttyp.strip() if schachttyp else '',
+                    hvb=hvb_size.strip() if hvb_size else ''
+                )
+                print(f"DEBUG: Trimmed match found: {sonden_options.count()}")
+            
+            # Show what schachttyp values exist
+            all_schacht = Sondengroesse.objects.values_list('schachttyp', flat=True).distinct()
+            print(f"DEBUG: Available schachttyp values: {list(all_schacht)}")
+            
+            # Show what hvb values exist
+            all_hvb = Sondengroesse.objects.values_list('hvb', flat=True).distinct()
+            print(f"DEBUG: Available hvb values: {list(all_hvb)}")
+            
+            # Show first few probes
+            sample_probes = Sondengroesse.objects.all()[:5]
+            for probe in sample_probes:
+                print(f"DEBUG: Sample probe - schachttyp: '{probe.schachttyp}' (repr: {repr(probe.schachttyp)}), hvb: '{probe.hvb}' (repr: {repr(probe.hvb)})")
         
-        # Show what schachttyp values exist
-        all_schacht = Sondengroesse.objects.values_list('schachttyp', flat=True).distinct()
-        print(f"DEBUG: Available schachttyp values: {list(all_schacht)}")
+        # Get the values
+        options_list = sonden_options.values(
+            'durchmesser_sonde', 'sondenanzahl_min', 'sondenanzahl_max',
+            'artikelnummer', 'artikelbezeichnung'
+        ).distinct()
         
-        # Show what hvb values exist
-        all_hvb = Sondengroesse.objects.values_list('hvb', flat=True).distinct()
-        print(f"DEBUG: Available hvb values: {list(all_hvb)}")
+        options_list = list(options_list)
+        print(f"DEBUG: Returning {len(options_list)} options")
         
-        # Show first few probes
-        sample_probes = Sondengroesse.objects.all()[:5]
-        for probe in sample_probes:
-            print(f"DEBUG: Sample probe - schachttyp: '{probe.schachttyp}' (repr: {repr(probe.schachttyp)}), hvb: '{probe.hvb}' (repr: {repr(probe.hvb)})")
+        return JsonResponse({
+            'sonden_options': options_list,
+            'debug': {
+                'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size},
+                'count': len(options_list)
+            }
+        })
     
-    # Get the values
-    options_list = sonden_options.values(
-        'durchmesser_sonde', 'sondenanzahl_min', 'sondenanzahl_max',
-        'artikelnummer', 'artikelbezeichnung'
-    ).distinct()
-    
-    options_list = list(options_list)
-    print(f"DEBUG: Returning {len(options_list)} options")
-    
-    return JsonResponse({
-        'sonden_options': options_list,
-        'debug': {
-            'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size},
-            'count': len(options_list)
-        }
-    })
+    except Exception as e:
+        print(f"DEBUG: Exception in get_sonden_options: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'sonden_options': [],
+            'error': str(e)
+        })
 
 
 @csrf_exempt
