@@ -41,8 +41,15 @@ def get_sonden_options(request):
     """Get probe options based on selected shaft type and HVB"""
     try:
         data = json.loads(request.body)
-        schachttyp = data.get('schachttyp', '').strip() if data.get('schachttyp') else ''
-        hvb_size = data.get('hvb_size', '').strip() if data.get('hvb_size') else ''
+        raw_schachttyp = data.get('schachttyp', '') or ''
+        raw_hvb_size = data.get('hvb_size', '') or ''
+
+        # Normalize inputs defensively (handles autofill and formatting differences)
+        schachttyp = " ".join(str(raw_schachttyp).strip().split())  # collapse inner whitespace
+        hvb_size = str(raw_hvb_size).strip()
+        # Remove 'mm' suffix if present, but keep the number
+        if hvb_size.lower().endswith('mm'):
+            hvb_size = hvb_size[:-2].strip()
         
         # Debug logging
         print(f"DEBUG: Received request - schachttyp: '{schachttyp}', hvb_size: '{hvb_size}'")
@@ -58,10 +65,10 @@ def get_sonden_options(request):
                 'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size}
             })
         
-        # Try exact match first
+        # Try strict case-insensitive match first
         sonden_options = Sondengroesse.objects.filter(
-            schachttyp=schachttyp,
-            hvb=hvb_size
+            schachttyp__iexact=schachttyp,
+            hvb__iexact=hvb_size
         )
         
         print(f"DEBUG: Query filter - schachttyp='{schachttyp}', hvb='{hvb_size}'")
@@ -71,20 +78,22 @@ def get_sonden_options(request):
         if sonden_options.count() == 0:
             print(f"DEBUG: No exact match found. Searching for similar...")
             
-            # Try case-insensitive match
-            sonden_options = Sondengroesse.objects.filter(
-                schachttyp__iexact=schachttyp,
-                hvb=hvb_size
-            )
-            print(f"DEBUG: Case-insensitive match found: {sonden_options.count()}")
-            
+            # Try fuzzy HVB matching and trimmed values
             if sonden_options.count() == 0:
-                # Try stripping whitespace
                 sonden_options = Sondengroesse.objects.filter(
-                    schachttyp__iexact=schachttyp.strip() if schachttyp else '',
-                    hvb=hvb_size.strip() if hvb_size else ''
+                    schachttyp__iexact=schachttyp.strip(),
+                    hvb__icontains=hvb_size.strip()
                 )
-                print(f"DEBUG: Trimmed match found: {sonden_options.count()}")
+                print(f"DEBUG: Fuzzy/trimmed match found: {sonden_options.count()}")
+
+            # Safe fallback: if still nothing, try by schachttyp only
+            fallback_used = False
+            if sonden_options.count() == 0:
+                fallback_used = True
+                sonden_options = Sondengroesse.objects.filter(
+                    schachttyp__iexact=schachttyp.strip()
+                )
+                print(f"DEBUG: Fallback by schachttyp only: {sonden_options.count()}")
             
             # Show what schachttyp values exist
             all_schacht = Sondengroesse.objects.values_list('schachttyp', flat=True).distinct()
@@ -103,18 +112,21 @@ def get_sonden_options(request):
         options_list = sonden_options.values(
             'durchmesser_sonde', 'sondenanzahl_min', 'sondenanzahl_max',
             'artikelnummer', 'artikelbezeichnung'
-        ).distinct()
+        ).distinct().order_by('durchmesser_sonde')
         
         options_list = list(options_list)
         print(f"DEBUG: Returning {len(options_list)} options")
         
-        return JsonResponse({
+        response_payload = {
             'sonden_options': options_list,
             'debug': {
                 'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size},
                 'count': len(options_list)
             }
-        })
+        }
+        if 'fallback_used' in locals() and fallback_used:
+            response_payload['debug']['fallback'] = 'schachttyp_only'
+        return JsonResponse(response_payload)
     
     except Exception as e:
         print(f"DEBUG: Exception in get_sonden_options: {e}")
