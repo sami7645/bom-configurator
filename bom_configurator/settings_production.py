@@ -47,9 +47,12 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # Add any additional Railway domains if needed
-# You can add more domains here if your Railway deployment uses different subdomains
-if os.environ.get('RAILWAY_STATIC_URL'):
-    CSRF_TRUSTED_ORIGINS.append(os.environ.get('RAILWAY_STATIC_URL'))
+# Ensure any domain added includes scheme (Django 4+ requirement)
+extra_origin = os.environ.get('RAILWAY_STATIC_URL')
+if extra_origin:
+    if not extra_origin.startswith('http://') and not extra_origin.startswith('https://'):
+        extra_origin = f'https://{extra_origin}'
+    CSRF_TRUSTED_ORIGINS.append(extra_origin)
 
 # Also allow HTTP for local testing (remove in production)
 if os.environ.get('RAILWAY_ENVIRONMENT') != 'production':
