@@ -36,3 +36,34 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 SECURE_SSL_REDIRECT = False  # Set to True if using HTTPS
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# CSRF settings for Railway deployment
+# Get Railway domain from environment variable or use default
+RAILWAY_PUBLIC_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'web-production-d6edc.up.railway.app')
+
+# CSRF_TRUSTED_ORIGINS must list specific domains (no wildcards)
+CSRF_TRUSTED_ORIGINS = [
+    f'https://{RAILWAY_PUBLIC_DOMAIN}',
+]
+
+# Add any additional Railway domains if needed
+# You can add more domains here if your Railway deployment uses different subdomains
+if os.environ.get('RAILWAY_STATIC_URL'):
+    CSRF_TRUSTED_ORIGINS.append(os.environ.get('RAILWAY_STATIC_URL'))
+
+# Also allow HTTP for local testing (remove in production)
+if os.environ.get('RAILWAY_ENVIRONMENT') != 'production':
+    CSRF_TRUSTED_ORIGINS.extend([
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+    ])
+
+# CSRF cookie settings for HTTPS
+CSRF_COOKIE_SECURE = True  # Only send CSRF cookie over HTTPS
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# Session cookie settings for HTTPS
+SESSION_COOKIE_SECURE = True  # Only send session cookie over HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
