@@ -25,12 +25,63 @@ def index(request):
 
 def configurator(request):
     """BOM Configurator main interface"""
+    from django.db.models import Case, When, IntegerField
+    
+    # Custom order for Schachttyp
+    schacht_order = Case(
+        When(schachttyp='Verteiler', then=1),
+        When(schachttyp='GN X1', then=2),
+        When(schachttyp='GN X2', then=3),
+        When(schachttyp='GN X3', then=4),
+        When(schachttyp='GN X4', then=5),
+        When(schachttyp='GN 2', then=6),
+        When(schachttyp='GN 1', then=7),
+        When(schachttyp='GN R Medium', then=8),
+        When(schachttyp='GN R Kompakt', then=9),
+        When(schachttyp='GN R Mini', then=10),
+        When(schachttyp='GN R Nano', then=11),
+        default=99,
+        output_field=IntegerField()
+    )
+    
+    # Sort HVB sizes numerically (convert to int for proper sorting)
+    hvb_sizes = sorted(
+        HVB.objects.all(),
+        key=lambda x: int(x.hauptverteilerbalken) if x.hauptverteilerbalken.isdigit() else 9999
+    )
+    
+    # Get DFM types and separate Brass/Plastic categories
+    # Exclude category headers that shouldn't be selectable
+    exclude_categories = ['Brass Flowmeters', 'Plastic Flowmeters']
+    all_dfm_types = DFM.objects.exclude(
+        durchflussarmatur__in=exclude_categories
+    ).values('durchflussarmatur').distinct().order_by('durchflussarmatur')
+    
+    dfm_types = []
+    brass_flowmeters = []
+    plastic_flowmeters = []
+    
+    for dfm in all_dfm_types:
+        name = dfm['durchflussarmatur']
+        # Categorize based on known patterns
+        if (name.startswith('HC VTR') or 
+            name.startswith('IMI STAD') or 
+            name.startswith('IMI TA') or 
+            name.startswith('K-DFM')):
+            brass_flowmeters.append(name)
+        elif name.startswith('Plastic') and name != 'Plastic Flowmeters':
+            plastic_flowmeters.append(name)
+        else:
+            dfm_types.append(name)
+    
     context = {
-        'schacht_types': Schacht.objects.all().order_by('schachttyp'),
-        'hvb_sizes': HVB.objects.all().order_by('hauptverteilerbalken'),
+        'schacht_types': Schacht.objects.all().order_by(schacht_order),
+        'hvb_sizes': hvb_sizes,
         'sondenabstaende': Sondenabstand.objects.all().order_by('sondenabstand'),
         'kugelhahn_types': Kugelhahn.objects.values('kugelhahn').distinct().order_by('kugelhahn'),
-        'dfm_types': DFM.objects.values('durchflussarmatur').distinct().order_by('durchflussarmatur'),
+        'dfm_types': dfm_types,
+        'brass_flowmeters': sorted(brass_flowmeters),
+        'plastic_flowmeters': sorted(plastic_flowmeters),
     }
     return render(request, 'configurator/configurator.html', context)
 
@@ -108,13 +159,18 @@ def get_sonden_options(request):
             for probe in sample_probes:
                 print(f"DEBUG: Sample probe - schachttyp: '{probe.schachttyp}' (repr: {repr(probe.schachttyp)}), hvb: '{probe.hvb}' (repr: {repr(probe.hvb)})")
         
-        # Get the values
+        # Get the values and sort numerically by diameter
         options_list = sonden_options.values(
             'durchmesser_sonde', 'sondenanzahl_min', 'sondenanzahl_max',
             'artikelnummer', 'artikelbezeichnung'
-        ).distinct().order_by('durchmesser_sonde')
+        ).distinct()
         
+        # Convert to list and sort numerically by durchmesser_sonde
         options_list = list(options_list)
+        options_list = sorted(
+            options_list,
+            key=lambda x: int(x['durchmesser_sonde']) if x['durchmesser_sonde'].isdigit() else 9999
+        )
         print(f"DEBUG: Returning {len(options_list)} options")
         
         response_payload = {
