@@ -116,36 +116,48 @@ def get_sonden_options(request):
                 'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size}
             })
         
-        # Try strict case-insensitive match first
-        sonden_options = Sondengroesse.objects.filter(
-            schachttyp__iexact=schachttyp,
-            hvb__iexact=hvb_size
-        )
+        # Strategy: Show ALL available diameters for this schachttyp
+        # For each diameter, prefer exact HVB match, but include any available entry if exact match doesn't exist
+        
+        # Get all unique diameters available for this schachttyp
+        all_diameters_for_schachttyp = Sondengroesse.objects.filter(
+            schachttyp__iexact=schachttyp
+        ).values_list('durchmesser_sonde', flat=True).distinct()
         
         print(f"DEBUG: Query filter - schachttyp='{schachttyp}', hvb='{hvb_size}'")
-        print(f"DEBUG: Found {sonden_options.count()} probes with exact match")
+        print(f"DEBUG: Available diameters for schachttyp: {list(all_diameters_for_schachttyp)}")
         
-        # If no exact match, try to find similar matches for debugging
+        # Build query set with best match for each diameter
+        sonden_options = Sondengroesse.objects.none()  # Start with empty queryset
+        
+        for diameter in all_diameters_for_schachttyp:
+            # First, try to find exact match (schachttyp + HVB + diameter)
+            exact_match = Sondengroesse.objects.filter(
+                schachttyp__iexact=schachttyp,
+                hvb__iexact=hvb_size,
+                durchmesser_sonde=diameter
+            ).first()
+            
+            if exact_match:
+                # Use exact match
+                sonden_options = sonden_options | Sondengroesse.objects.filter(id=exact_match.id)
+                print(f"DEBUG: Found exact match for {diameter}mm with HVB {hvb_size}")
+            else:
+                # Fallback: get any entry for this schachttyp and diameter
+                fallback_match = Sondengroesse.objects.filter(
+                    schachttyp__iexact=schachttyp,
+                    durchmesser_sonde=diameter
+                ).first()
+                
+                if fallback_match:
+                    sonden_options = sonden_options | Sondengroesse.objects.filter(id=fallback_match.id)
+                    print(f"DEBUG: Using fallback for {diameter}mm (HVB {fallback_match.hvb} instead of {hvb_size})")
+        
+        print(f"DEBUG: Total probes found: {sonden_options.count()}")
+        
+        # If still no results, show debug info
         if sonden_options.count() == 0:
-            print(f"DEBUG: No exact match found. Searching for similar...")
-            
-            # Try fuzzy HVB matching and trimmed values
-            if sonden_options.count() == 0:
-                sonden_options = Sondengroesse.objects.filter(
-                    schachttyp__iexact=schachttyp.strip(),
-                    hvb__icontains=hvb_size.strip()
-                )
-                print(f"DEBUG: Fuzzy/trimmed match found: {sonden_options.count()}")
-
-            # Safe fallback: if still nothing, try by schachttyp only
-            fallback_used = False
-            if sonden_options.count() == 0:
-                fallback_used = True
-                sonden_options = Sondengroesse.objects.filter(
-                    schachttyp__iexact=schachttyp.strip()
-                )
-                print(f"DEBUG: Fallback by schachttyp only: {sonden_options.count()}")
-            
+            print(f"DEBUG: No probes found for schachttyp '{schachttyp}'")
             # Show what schachttyp values exist
             all_schacht = Sondengroesse.objects.values_list('schachttyp', flat=True).distinct()
             print(f"DEBUG: Available schachttyp values: {list(all_schacht)}")
@@ -153,11 +165,6 @@ def get_sonden_options(request):
             # Show what hvb values exist
             all_hvb = Sondengroesse.objects.values_list('hvb', flat=True).distinct()
             print(f"DEBUG: Available hvb values: {list(all_hvb)}")
-            
-            # Show first few probes
-            sample_probes = Sondengroesse.objects.all()[:5]
-            for probe in sample_probes:
-                print(f"DEBUG: Sample probe - schachttyp: '{probe.schachttyp}' (repr: {repr(probe.schachttyp)}), hvb: '{probe.hvb}' (repr: {repr(probe.hvb)})")
         
         # Get the values and sort numerically by diameter
         options_list = sonden_options.values(
@@ -180,8 +187,6 @@ def get_sonden_options(request):
                 'count': len(options_list)
             }
         }
-        if 'fallback_used' in locals() and fallback_used:
-            response_payload['debug']['fallback'] = 'schachttyp_only'
         return JsonResponse(response_payload)
     
     except Exception as e:
