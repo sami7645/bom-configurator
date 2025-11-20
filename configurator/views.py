@@ -116,42 +116,59 @@ def get_sonden_options(request):
                 'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size}
             })
         
-        # Strategy: Show ALL available diameters for this schachttyp
-        # For each diameter, prefer exact HVB match, but include any available entry if exact match doesn't exist
-        
-        # Get all unique diameters available for this schachttyp
-        all_diameters_for_schachttyp = Sondengroesse.objects.filter(
-            schachttyp__iexact=schachttyp
-        ).values_list('durchmesser_sonde', flat=True).distinct()
+        # First, try exact match (schachttyp + HVB) - this is the original behavior
+        sonden_options = Sondengroesse.objects.filter(
+            schachttyp__iexact=schachttyp,
+            hvb__iexact=hvb_size
+        )
         
         print(f"DEBUG: Query filter - schachttyp='{schachttyp}', hvb='{hvb_size}'")
-        print(f"DEBUG: Available diameters for schachttyp: {list(all_diameters_for_schachttyp)}")
+        print(f"DEBUG: Found {sonden_options.count()} probes with exact match")
         
-        # Build query set with best match for each diameter
-        sonden_options = Sondengroesse.objects.none()  # Start with empty queryset
-        
-        for diameter in all_diameters_for_schachttyp:
-            # First, try to find exact match (schachttyp + HVB + diameter)
-            exact_match = Sondengroesse.objects.filter(
-                schachttyp__iexact=schachttyp,
-                hvb__iexact=hvb_size,
-                durchmesser_sonde=diameter
-            ).first()
+        # If we have exact matches, also check for additional diameters available for this schachttyp
+        # This ensures all available diameters are shown even if not all HVB combinations exist
+        if sonden_options.count() > 0:
+            # Get all unique diameters for this schachttyp
+            all_diameters_for_schachttyp = list(Sondengroesse.objects.filter(
+                schachttyp__iexact=schachttyp
+            ).values_list('durchmesser_sonde', flat=True).distinct())
             
-            if exact_match:
-                # Use exact match
-                sonden_options = sonden_options | Sondengroesse.objects.filter(id=exact_match.id)
-                print(f"DEBUG: Found exact match for {diameter}mm with HVB {hvb_size}")
-            else:
-                # Fallback: get any entry for this schachttyp and diameter
-                fallback_match = Sondengroesse.objects.filter(
-                    schachttyp__iexact=schachttyp,
-                    durchmesser_sonde=diameter
-                ).first()
+            # Get diameters we already have from exact match
+            existing_diameters = set(sonden_options.values_list('durchmesser_sonde', flat=True).distinct())
+            all_diameters = set(all_diameters_for_schachttyp)
+            
+            # Find missing diameters
+            missing_diameters = all_diameters - existing_diameters
+            
+            if missing_diameters:
+                print(f"DEBUG: Found {len(existing_diameters)} diameters in exact match, but {len(all_diameters)} available for schachttyp")
+                print(f"DEBUG: Missing diameters: {missing_diameters}")
                 
-                if fallback_match:
-                    sonden_options = sonden_options | Sondengroesse.objects.filter(id=fallback_match.id)
-                    print(f"DEBUG: Using fallback for {diameter}mm (HVB {fallback_match.hvb} instead of {hvb_size})")
+                # Get IDs of existing probes
+                existing_ids = list(sonden_options.values_list('id', flat=True))
+                
+                # For each missing diameter, get best available entry
+                for missing_diam in missing_diameters:
+                    # Try to find same HVB first
+                    missing_probe = Sondengroesse.objects.filter(
+                        schachttyp__iexact=schachttyp,
+                        hvb__iexact=hvb_size,
+                        durchmesser_sonde=missing_diam
+                    ).first()
+                    
+                    # If not found, get any entry for this schachttyp and diameter
+                    if not missing_probe:
+                        missing_probe = Sondengroesse.objects.filter(
+                            schachttyp__iexact=schachttyp,
+                            durchmesser_sonde=missing_diam
+                        ).first()
+                    
+                    if missing_probe:
+                        existing_ids.append(missing_probe.id)
+                        print(f"DEBUG: Added missing diameter {missing_diam}mm from HVB {missing_probe.hvb}")
+                
+                # Get all probes by IDs
+                sonden_options = Sondengroesse.objects.filter(id__in=existing_ids)
         
         print(f"DEBUG: Total probes found: {sonden_options.count()}")
         
