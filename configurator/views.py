@@ -25,12 +25,63 @@ def index(request):
 
 def configurator(request):
     """BOM Configurator main interface"""
+    from django.db.models import Case, When, IntegerField
+    
+    # Custom order for Schachttyp
+    schacht_order = Case(
+        When(schachttyp='Verteiler', then=1),
+        When(schachttyp='GN X1', then=2),
+        When(schachttyp='GN X2', then=3),
+        When(schachttyp='GN X3', then=4),
+        When(schachttyp='GN X4', then=5),
+        When(schachttyp='GN 2', then=6),
+        When(schachttyp='GN 1', then=7),
+        When(schachttyp='GN R Medium', then=8),
+        When(schachttyp='GN R Kompakt', then=9),
+        When(schachttyp='GN R Mini', then=10),
+        When(schachttyp='GN R Nano', then=11),
+        default=99,
+        output_field=IntegerField()
+    )
+    
+    # Sort HVB sizes numerically (convert to int for proper sorting)
+    hvb_sizes = sorted(
+        HVB.objects.all(),
+        key=lambda x: int(x.hauptverteilerbalken) if x.hauptverteilerbalken.isdigit() else 9999
+    )
+    
+    # Get DFM types and separate Brass/Plastic categories
+    # Exclude category headers that shouldn't be selectable
+    exclude_categories = ['Brass Flowmeters', 'Plastic Flowmeters']
+    all_dfm_types = DFM.objects.exclude(
+        durchflussarmatur__in=exclude_categories
+    ).values('durchflussarmatur').distinct().order_by('durchflussarmatur')
+    
+    dfm_types = []
+    brass_flowmeters = []
+    plastic_flowmeters = []
+    
+    for dfm in all_dfm_types:
+        name = dfm['durchflussarmatur']
+        # Categorize based on known patterns
+        if (name.startswith('HC VTR') or 
+            name.startswith('IMI STAD') or 
+            name.startswith('IMI TA') or 
+            name.startswith('K-DFM')):
+            brass_flowmeters.append(name)
+        elif name.startswith('Plastic') and name != 'Plastic Flowmeters':
+            plastic_flowmeters.append(name)
+        else:
+            dfm_types.append(name)
+    
     context = {
-        'schacht_types': Schacht.objects.all().order_by('schachttyp'),
-        'hvb_sizes': HVB.objects.all().order_by('hauptverteilerbalken'),
+        'schacht_types': Schacht.objects.all().order_by(schacht_order),
+        'hvb_sizes': hvb_sizes,
         'sondenabstaende': Sondenabstand.objects.all().order_by('sondenabstand'),
         'kugelhahn_types': Kugelhahn.objects.values('kugelhahn').distinct().order_by('kugelhahn'),
-        'dfm_types': DFM.objects.values('durchflussarmatur').distinct().order_by('durchflussarmatur'),
+        'dfm_types': dfm_types,
+        'brass_flowmeters': sorted(brass_flowmeters),
+        'plastic_flowmeters': sorted(plastic_flowmeters),
     }
     return render(request, 'configurator/configurator.html', context)
 
@@ -47,7 +98,9 @@ def get_sonden_options(request):
         # Normalize inputs defensively (handles autofill and formatting differences)
         schachttyp = " ".join(str(raw_schachttyp).strip().split())  # collapse inner whitespace
         hvb_size = str(raw_hvb_size).strip()
-        hvb_size = re.sub(r"[^0-9]", "", hvb_size)  # keep only digits, drop 'mm' or spaces
+        # Remove 'mm' suffix if present, but keep the number
+        if hvb_size.lower().endswith('mm'):
+            hvb_size = hvb_size[:-2].strip()
         
         # Debug logging
         print(f"DEBUG: Received request - schachttyp: '{schachttyp}', hvb_size: '{hvb_size}'")
@@ -63,10 +116,10 @@ def get_sonden_options(request):
                 'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size}
             })
         
-        # Try exact match first
+        # Try strict case-insensitive match first
         sonden_options = Sondengroesse.objects.filter(
-            schachttyp=schachttyp,
-            hvb=hvb_size
+            schachttyp__iexact=schachttyp,
+            hvb__iexact=hvb_size
         )
         
         print(f"DEBUG: Query filter - schachttyp='{schachttyp}', hvb='{hvb_size}'")
@@ -76,28 +129,22 @@ def get_sonden_options(request):
         if sonden_options.count() == 0:
             print(f"DEBUG: No exact match found. Searching for similar...")
             
-            # Try case-insensitive match
-            sonden_options = Sondengroesse.objects.filter(
-                schachttyp__iexact=schachttyp,
-                hvb=hvb_size
-            )
-            print(f"DEBUG: Case-insensitive match found: {sonden_options.count()}")
-            
+            # Try fuzzy HVB matching and trimmed values
             if sonden_options.count() == 0:
-                # Try stripping whitespace
                 sonden_options = Sondengroesse.objects.filter(
-                    schachttyp__iexact=schachttyp.strip() if schachttyp else '',
-                    hvb=hvb_size.strip() if hvb_size else ''
+                    schachttyp__iexact=schachttyp.strip(),
+                    hvb__icontains=hvb_size.strip()
                 )
-                print(f"DEBUG: Trimmed match found: {sonden_options.count()}")
+                print(f"DEBUG: Fuzzy/trimmed match found: {sonden_options.count()}")
 
-            # Final attempt: allow partial hvb match if digits-only parsing resulted in empty
-            if sonden_options.count() == 0 and hvb_size:
+            # Safe fallback: if still nothing, try by schachttyp only
+            fallback_used = False
+            if sonden_options.count() == 0:
+                fallback_used = True
                 sonden_options = Sondengroesse.objects.filter(
-                    schachttyp__iexact=schachttyp,
-                    hvb__icontains=hvb_size
+                    schachttyp__iexact=schachttyp.strip()
                 )
-                print(f"DEBUG: Fuzzy HVB match found: {sonden_options.count()}")
+                print(f"DEBUG: Fallback by schachttyp only: {sonden_options.count()}")
             
             # Show what schachttyp values exist
             all_schacht = Sondengroesse.objects.values_list('schachttyp', flat=True).distinct()
@@ -112,22 +159,30 @@ def get_sonden_options(request):
             for probe in sample_probes:
                 print(f"DEBUG: Sample probe - schachttyp: '{probe.schachttyp}' (repr: {repr(probe.schachttyp)}), hvb: '{probe.hvb}' (repr: {repr(probe.hvb)})")
         
-        # Get the values
+        # Get the values and sort numerically by diameter
         options_list = sonden_options.values(
             'durchmesser_sonde', 'sondenanzahl_min', 'sondenanzahl_max',
             'artikelnummer', 'artikelbezeichnung'
-        ).distinct().order_by('durchmesser_sonde')
+        ).distinct()
         
+        # Convert to list and sort numerically by durchmesser_sonde
         options_list = list(options_list)
+        options_list = sorted(
+            options_list,
+            key=lambda x: int(x['durchmesser_sonde']) if x['durchmesser_sonde'].isdigit() else 9999
+        )
         print(f"DEBUG: Returning {len(options_list)} options")
         
-        return JsonResponse({
+        response_payload = {
             'sonden_options': options_list,
             'debug': {
                 'received': {'schachttyp': schachttyp, 'hvb_size': hvb_size},
                 'count': len(options_list)
             }
-        })
+        }
+        if 'fallback_used' in locals() and fallback_used:
+            response_payload['debug']['fallback'] = 'schachttyp_only'
+        return JsonResponse(response_payload)
     
     except Exception as e:
         print(f"DEBUG: Exception in get_sonden_options: {e}")
@@ -236,6 +291,38 @@ def get_gnx_chamber_articles(request):
     })
 
 
+def check_compatibility(compatibility_field, hvb_size, sonden_durchmesser, check_type='either'):
+    """
+    Check if an item is compatible with the selected HVB size and sonden diameter.
+    Compatibility field format: "DA 63|DA 75|DA 90" or "DA 32|DA 40"
+    
+    Args:
+        compatibility_field: The compatibility string from CSV
+        hvb_size: Selected HVB size (e.g., "63")
+        sonden_durchmesser: Selected sonden diameter (e.g., "32")
+        check_type: 'either' (default) or 'hvb' or 'sonden'
+    """
+    if not compatibility_field or not compatibility_field.strip():
+        return True  # No compatibility restriction means it's compatible
+    
+    # Format HVB size as "DA XX" (e.g., "63" -> "DA 63")
+    hvb_formatted = f"DA {hvb_size}"
+    
+    # Format sonden diameter as "DA XX" (e.g., "32" -> "DA 32")
+    sonden_formatted = f"DA {sonden_durchmesser}"
+    
+    # Parse compatible values
+    compatible_values = [v.strip() for v in compatibility_field.split('|')]
+    
+    # Check based on type
+    if check_type == 'hvb':
+        return hvb_formatted in compatible_values
+    elif check_type == 'sonden':
+        return sonden_formatted in compatible_values
+    else:  # 'either' - default
+        return hvb_formatted in compatible_values or sonden_formatted in compatible_values
+
+
 def calculate_formula(formula, context):
     """Safely calculate formula with given context"""
     if not formula or formula.strip() == '':
@@ -247,9 +334,14 @@ def calculate_formula(formula, context):
         if safe_formula.startswith('='):
             safe_formula = safe_formula[1:]
         
-        # Replace variables in formula
-        for key, value in context.items():
-            safe_formula = safe_formula.replace(key, str(value))
+        # Replace variables in formula - sort by length (longest first) to avoid partial replacements
+        # e.g., replace 'sondenanzahl_min' before 'sondenanzahl'
+        sorted_keys = sorted(context.keys(), key=len, reverse=True)
+        for key in sorted_keys:
+            value = context[key]
+            # Use word boundaries to avoid partial matches
+            pattern = r'\b' + re.escape(key) + r'\b'
+            safe_formula = re.sub(pattern, str(value), safe_formula)
         
         # Only allow basic mathematical operations
         allowed_chars = set('0123456789+-*/.() ')
@@ -316,16 +408,23 @@ def generate_bom(request):
         hvb = HVB.objects.filter(hauptverteilerbalken=config.hvb_size).first()
         if hvb:
             quantity = hvb.menge_statisch or Decimal('1')
+            calculated = None
             if hvb.menge_formel:
                 calculated = calculate_formula(hvb.menge_formel, calc_context)
                 if calculated is not None:
-                    # Convert millimeters to meters for HVB length
-                    quantity = calculated / 1000  # Convert mm to meters
+                    # Formula calculates in mm, convert to meters for quantity
+                    quantity = calculated / Decimal('1000')  # Convert mm to meters
+            
+            # Format description with length in meters
+            if hvb.menge_formel and calculated is not None:
+                artikelbezeichnung = f"{hvb.artikelbezeichnung} ({calculated:.0f}mm / {quantity:.3f}m)"
+            else:
+                artikelbezeichnung = hvb.artikelbezeichnung
             
             bom_item = BOMItem.objects.create(
                 configuration=config,
                 artikelnummer=hvb.artikelnummer,
-                artikelbezeichnung=f"{hvb.artikelbezeichnung} ({quantity:.3f}m)" if hvb.menge_formel else hvb.artikelbezeichnung,
+                artikelbezeichnung=artikelbezeichnung,
                 menge=quantity,
                 calculated_quantity=calculated if hvb.menge_formel else None,
                 source_table='HVB'
@@ -342,6 +441,7 @@ def generate_bom(request):
         for sonde in sonden:
             if sonde.artikelnummer:
                 # Calculate quantities based on Vorlauf/Rücklauf
+                # These are per-sonde lengths, so multiply by sondenanzahl
                 vorlauf_qty = sonde.vorlauf_laenge or Decimal('0')
                 ruecklauf_qty = sonde.ruecklauf_laenge or Decimal('0')
                 
@@ -355,7 +455,8 @@ def generate_bom(request):
                     if calculated is not None:
                         ruecklauf_qty = calculated
                 
-                total_qty = vorlauf_qty + ruecklauf_qty
+                # Multiply by sondenanzahl to get total length for all sonden
+                total_qty = (vorlauf_qty + ruecklauf_qty) * Decimal(str(config.sondenanzahl))
                 
                 if total_qty > 0:
                     bom_item = BOMItem.objects.create(
@@ -372,40 +473,104 @@ def generate_bom(request):
             kugelhaehne = Kugelhahn.objects.filter(kugelhahn=config.kugelhahn_type)
             for kugelhahn in kugelhaehne:
                 if kugelhahn.artikelnummer:
-                    quantity = kugelhahn.menge_statisch or Decimal('1')
-                    if kugelhahn.menge_formel:
-                        calculated = calculate_formula(kugelhahn.menge_formel, calc_context)
-                        if calculated is not None:
-                            quantity = calculated
+                    # Check compatibility
+                    is_compatible = True
                     
-                    bom_item = BOMItem.objects.create(
-                        configuration=config,
-                        artikelnummer=kugelhahn.artikelnummer,
-                        artikelbezeichnung=kugelhahn.artikelbezeichnung,
-                        menge=quantity,
-                        source_table='Kugelhahn'
-                    )
-                    bom_items.append(bom_item)
+                    # Check ET-HVB compatibility (if specified) - must match HVB
+                    if kugelhahn.et_hvb:
+                        is_compatible = check_compatibility(
+                            kugelhahn.et_hvb, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='hvb'
+                        )
+                    
+                    # Check ET-Sonden compatibility (if specified) - must match sonden
+                    if is_compatible and kugelhahn.et_sonden:
+                        is_compatible = check_compatibility(
+                            kugelhahn.et_sonden, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='sonden'
+                        )
+                    
+                    # Check KH-HVB compatibility (if specified) - must match HVB
+                    if is_compatible and kugelhahn.kh_hvb:
+                        is_compatible = check_compatibility(
+                            kugelhahn.kh_hvb, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='hvb'
+                        )
+                    
+                    # Only add if compatible
+                    if is_compatible:
+                        quantity = kugelhahn.menge_statisch or Decimal('1')
+                        if kugelhahn.menge_formel:
+                            calculated = calculate_formula(kugelhahn.menge_formel, calc_context)
+                            if calculated is not None:
+                                quantity = calculated
+                        
+                        bom_item = BOMItem.objects.create(
+                            configuration=config,
+                            artikelnummer=kugelhahn.artikelnummer,
+                            artikelbezeichnung=kugelhahn.artikelbezeichnung,
+                            menge=quantity,
+                            source_table='Kugelhahn'
+                        )
+                        bom_items.append(bom_item)
         
         # Add DFM items if selected
         if config.dfm_type:
             dfms = DFM.objects.filter(durchflussarmatur=config.dfm_type)
             for dfm in dfms:
                 if dfm.artikelnummer:
-                    quantity = dfm.menge_statisch or Decimal('1')
-                    if dfm.menge_formel:
-                        calculated = calculate_formula(dfm.menge_formel, calc_context)
-                        if calculated is not None:
-                            quantity = calculated
+                    # Check compatibility
+                    is_compatible = True
                     
-                    bom_item = BOMItem.objects.create(
-                        configuration=config,
-                        artikelnummer=dfm.artikelnummer,
-                        artikelbezeichnung=dfm.artikelbezeichnung,
-                        menge=quantity,
-                        source_table='DFM'
-                    )
-                    bom_items.append(bom_item)
+                    # Check ET-HVB compatibility (if specified) - must match HVB
+                    if dfm.et_hvb:
+                        is_compatible = check_compatibility(
+                            dfm.et_hvb, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='hvb'
+                        )
+                    
+                    # Check ET-Sonden compatibility (if specified) - must match sonden
+                    if is_compatible and dfm.et_sonden:
+                        is_compatible = check_compatibility(
+                            dfm.et_sonden, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='sonden'
+                        )
+                    
+                    # Check DFM-HVB compatibility (if specified) - must match HVB
+                    if is_compatible and dfm.dfm_hvb:
+                        is_compatible = check_compatibility(
+                            dfm.dfm_hvb, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='hvb'
+                        )
+                    
+                    # Only add if compatible
+                    if is_compatible:
+                        quantity = dfm.menge_statisch or Decimal('1')
+                        if dfm.menge_formel:
+                            calculated = calculate_formula(dfm.menge_formel, calc_context)
+                            if calculated is not None:
+                                quantity = calculated
+                        
+                        bom_item = BOMItem.objects.create(
+                            configuration=config,
+                            artikelnummer=dfm.artikelnummer,
+                            artikelbezeichnung=dfm.artikelbezeichnung,
+                            menge=quantity,
+                            source_table='DFM'
+                        )
+                        bom_items.append(bom_item)
         
         # Handle GN X chamber articles if applicable
         if config.schachttyp in ['GN X1', 'GN X2', 'GN X3', 'GN X4']:
