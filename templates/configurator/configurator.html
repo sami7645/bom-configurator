@@ -187,22 +187,8 @@
                                     <label for="dfmType" class="form-label">Durchflussmesser-Typ (optional)</label>
                                     <select class="form-select" id="dfmType" name="dfm_type">
                                         <option value="">Keinen auswählen</option>
-                                        {% if brass_flowmeters %}
-                                            <optgroup label="Brass Flowmeters">
-                                                {% for dfm in brass_flowmeters %}
-                                                    <option value="{{ dfm }}">{{ dfm }}</option>
-                                                {% endfor %}
-                                            </optgroup>
-                                        {% endif %}
-                                        {% if plastic_flowmeters %}
-                                            <optgroup label="Plastic Flowmeters">
-                                                {% for dfm in plastic_flowmeters %}
-                                                    <option value="{{ dfm }}">{{ dfm }}</option>
-                                                {% endfor %}
-                                            </optgroup>
-                                        {% endif %}
                                         {% for dfm in dfm_types %}
-                                            <option value="{{ dfm }}">{{ dfm }}</option>
+                                            <option value="{{ dfm.durchflussarmatur }}">{{ dfm.durchflussarmatur }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
