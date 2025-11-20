@@ -291,6 +291,38 @@ def get_gnx_chamber_articles(request):
     })
 
 
+def check_compatibility(compatibility_field, hvb_size, sonden_durchmesser, check_type='either'):
+    """
+    Check if an item is compatible with the selected HVB size and sonden diameter.
+    Compatibility field format: "DA 63|DA 75|DA 90" or "DA 32|DA 40"
+    
+    Args:
+        compatibility_field: The compatibility string from CSV
+        hvb_size: Selected HVB size (e.g., "63")
+        sonden_durchmesser: Selected sonden diameter (e.g., "32")
+        check_type: 'either' (default) or 'hvb' or 'sonden'
+    """
+    if not compatibility_field or not compatibility_field.strip():
+        return True  # No compatibility restriction means it's compatible
+    
+    # Format HVB size as "DA XX" (e.g., "63" -> "DA 63")
+    hvb_formatted = f"DA {hvb_size}"
+    
+    # Format sonden diameter as "DA XX" (e.g., "32" -> "DA 32")
+    sonden_formatted = f"DA {sonden_durchmesser}"
+    
+    # Parse compatible values
+    compatible_values = [v.strip() for v in compatibility_field.split('|')]
+    
+    # Check based on type
+    if check_type == 'hvb':
+        return hvb_formatted in compatible_values
+    elif check_type == 'sonden':
+        return sonden_formatted in compatible_values
+    else:  # 'either' - default
+        return hvb_formatted in compatible_values or sonden_formatted in compatible_values
+
+
 def calculate_formula(formula, context):
     """Safely calculate formula with given context"""
     if not formula or formula.strip() == '':
@@ -302,9 +334,14 @@ def calculate_formula(formula, context):
         if safe_formula.startswith('='):
             safe_formula = safe_formula[1:]
         
-        # Replace variables in formula
-        for key, value in context.items():
-            safe_formula = safe_formula.replace(key, str(value))
+        # Replace variables in formula - sort by length (longest first) to avoid partial replacements
+        # e.g., replace 'sondenanzahl_min' before 'sondenanzahl'
+        sorted_keys = sorted(context.keys(), key=len, reverse=True)
+        for key in sorted_keys:
+            value = context[key]
+            # Use word boundaries to avoid partial matches
+            pattern = r'\b' + re.escape(key) + r'\b'
+            safe_formula = re.sub(pattern, str(value), safe_formula)
         
         # Only allow basic mathematical operations
         allowed_chars = set('0123456789+-*/.() ')
@@ -371,16 +408,23 @@ def generate_bom(request):
         hvb = HVB.objects.filter(hauptverteilerbalken=config.hvb_size).first()
         if hvb:
             quantity = hvb.menge_statisch or Decimal('1')
+            calculated = None
             if hvb.menge_formel:
                 calculated = calculate_formula(hvb.menge_formel, calc_context)
                 if calculated is not None:
-                    # Convert millimeters to meters for HVB length
-                    quantity = calculated / 1000  # Convert mm to meters
+                    # Formula calculates in mm, convert to meters for quantity
+                    quantity = calculated / Decimal('1000')  # Convert mm to meters
+            
+            # Format description with length in meters
+            if hvb.menge_formel and calculated is not None:
+                artikelbezeichnung = f"{hvb.artikelbezeichnung} ({calculated:.0f}mm / {quantity:.3f}m)"
+            else:
+                artikelbezeichnung = hvb.artikelbezeichnung
             
             bom_item = BOMItem.objects.create(
                 configuration=config,
                 artikelnummer=hvb.artikelnummer,
-                artikelbezeichnung=f"{hvb.artikelbezeichnung} ({quantity:.3f}m)" if hvb.menge_formel else hvb.artikelbezeichnung,
+                artikelbezeichnung=artikelbezeichnung,
                 menge=quantity,
                 calculated_quantity=calculated if hvb.menge_formel else None,
                 source_table='HVB'
@@ -397,6 +441,7 @@ def generate_bom(request):
         for sonde in sonden:
             if sonde.artikelnummer:
                 # Calculate quantities based on Vorlauf/Rücklauf
+                # These are per-sonde lengths, so multiply by sondenanzahl
                 vorlauf_qty = sonde.vorlauf_laenge or Decimal('0')
                 ruecklauf_qty = sonde.ruecklauf_laenge or Decimal('0')
                 
@@ -410,7 +455,8 @@ def generate_bom(request):
                     if calculated is not None:
                         ruecklauf_qty = calculated
                 
-                total_qty = vorlauf_qty + ruecklauf_qty
+                # Multiply by sondenanzahl to get total length for all sonden
+                total_qty = (vorlauf_qty + ruecklauf_qty) * Decimal(str(config.sondenanzahl))
                 
                 if total_qty > 0:
                     bom_item = BOMItem.objects.create(
@@ -427,40 +473,104 @@ def generate_bom(request):
             kugelhaehne = Kugelhahn.objects.filter(kugelhahn=config.kugelhahn_type)
             for kugelhahn in kugelhaehne:
                 if kugelhahn.artikelnummer:
-                    quantity = kugelhahn.menge_statisch or Decimal('1')
-                    if kugelhahn.menge_formel:
-                        calculated = calculate_formula(kugelhahn.menge_formel, calc_context)
-                        if calculated is not None:
-                            quantity = calculated
+                    # Check compatibility
+                    is_compatible = True
                     
-                    bom_item = BOMItem.objects.create(
-                        configuration=config,
-                        artikelnummer=kugelhahn.artikelnummer,
-                        artikelbezeichnung=kugelhahn.artikelbezeichnung,
-                        menge=quantity,
-                        source_table='Kugelhahn'
-                    )
-                    bom_items.append(bom_item)
+                    # Check ET-HVB compatibility (if specified) - must match HVB
+                    if kugelhahn.et_hvb:
+                        is_compatible = check_compatibility(
+                            kugelhahn.et_hvb, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='hvb'
+                        )
+                    
+                    # Check ET-Sonden compatibility (if specified) - must match sonden
+                    if is_compatible and kugelhahn.et_sonden:
+                        is_compatible = check_compatibility(
+                            kugelhahn.et_sonden, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='sonden'
+                        )
+                    
+                    # Check KH-HVB compatibility (if specified) - must match HVB
+                    if is_compatible and kugelhahn.kh_hvb:
+                        is_compatible = check_compatibility(
+                            kugelhahn.kh_hvb, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='hvb'
+                        )
+                    
+                    # Only add if compatible
+                    if is_compatible:
+                        quantity = kugelhahn.menge_statisch or Decimal('1')
+                        if kugelhahn.menge_formel:
+                            calculated = calculate_formula(kugelhahn.menge_formel, calc_context)
+                            if calculated is not None:
+                                quantity = calculated
+                        
+                        bom_item = BOMItem.objects.create(
+                            configuration=config,
+                            artikelnummer=kugelhahn.artikelnummer,
+                            artikelbezeichnung=kugelhahn.artikelbezeichnung,
+                            menge=quantity,
+                            source_table='Kugelhahn'
+                        )
+                        bom_items.append(bom_item)
         
         # Add DFM items if selected
         if config.dfm_type:
             dfms = DFM.objects.filter(durchflussarmatur=config.dfm_type)
             for dfm in dfms:
                 if dfm.artikelnummer:
-                    quantity = dfm.menge_statisch or Decimal('1')
-                    if dfm.menge_formel:
-                        calculated = calculate_formula(dfm.menge_formel, calc_context)
-                        if calculated is not None:
-                            quantity = calculated
+                    # Check compatibility
+                    is_compatible = True
                     
-                    bom_item = BOMItem.objects.create(
-                        configuration=config,
-                        artikelnummer=dfm.artikelnummer,
-                        artikelbezeichnung=dfm.artikelbezeichnung,
-                        menge=quantity,
-                        source_table='DFM'
-                    )
-                    bom_items.append(bom_item)
+                    # Check ET-HVB compatibility (if specified) - must match HVB
+                    if dfm.et_hvb:
+                        is_compatible = check_compatibility(
+                            dfm.et_hvb, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='hvb'
+                        )
+                    
+                    # Check ET-Sonden compatibility (if specified) - must match sonden
+                    if is_compatible and dfm.et_sonden:
+                        is_compatible = check_compatibility(
+                            dfm.et_sonden, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='sonden'
+                        )
+                    
+                    # Check DFM-HVB compatibility (if specified) - must match HVB
+                    if is_compatible and dfm.dfm_hvb:
+                        is_compatible = check_compatibility(
+                            dfm.dfm_hvb, 
+                            config.hvb_size, 
+                            config.sonden_durchmesser,
+                            check_type='hvb'
+                        )
+                    
+                    # Only add if compatible
+                    if is_compatible:
+                        quantity = dfm.menge_statisch or Decimal('1')
+                        if dfm.menge_formel:
+                            calculated = calculate_formula(dfm.menge_formel, calc_context)
+                            if calculated is not None:
+                                quantity = calculated
+                        
+                        bom_item = BOMItem.objects.create(
+                            configuration=config,
+                            artikelnummer=dfm.artikelnummer,
+                            artikelbezeichnung=dfm.artikelbezeichnung,
+                            menge=quantity,
+                            source_table='DFM'
+                        )
+                        bom_items.append(bom_item)
         
         # Handle GN X chamber articles if applicable
         if config.schachttyp in ['GN X1', 'GN X2', 'GN X3', 'GN X4']:
