@@ -11,6 +11,7 @@ urlpatterns = [
     # API endpoints
     path('api/sonden-options/', views.get_sonden_options, name='get_sonden_options'),
     path('api/sondenabstand-options/', views.get_sondenabstand_options, name='get_sondenabstand_options'),
+    path('api/dfm-options/', views.get_dfm_options, name='get_dfm_options'),
     path('api/check-configuration/', views.check_existing_configuration, name='check_existing_configuration'),
     path('api/gnx-chamber-articles/', views.get_gnx_chamber_articles, name='get_gnx_chamber_articles'),
     path('api/generate-bom/', views.generate_bom, name='generate_bom'),

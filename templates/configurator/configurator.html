@@ -184,12 +184,17 @@
                                     </select>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="dfmType" class="form-label">Durchflussmesser-Typ (optional)</label>
-                                    <select class="form-select" id="dfmType" name="dfm_type">
+                                    <label for="dfmCategory" class="form-label">Durchflussmesser-Kategorie (optional)</label>
+                                    <select class="form-select" id="dfmCategory" name="dfm_category">
                                         <option value="">Keinen auswählen</option>
-                                        {% for dfm in dfm_types %}
-                                            <option value="{{ dfm.durchflussarmatur }}">{{ dfm.durchflussarmatur }}</option>
-                                        {% endfor %}
+                                        <option value="plastic">Kunststoff-Durchflussmesser</option>
+                                        <option value="brass">Messing-Durchflussmesser</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="dfmType" class="form-label">Durchflussmesser-Typ</label>
+                                    <select class="form-select" id="dfmType" name="dfm_type" disabled>
+                                        <option value="">Erst Kategorie wählen...</option>
                                     </select>
                                 </div>
                             </div>
