@@ -416,7 +416,7 @@ def generate_bom(request):
             
             bom_item = BOMItem.objects.create(
                 configuration=config,
-                artikelnummer=schacht.artikelnummer,
+                artikelnummer=format_artikelnummer(schacht.artikelnummer),
                 artikelbezeichnung=schacht.artikelbezeichnung,
                 menge=quantity,
                 source_table='Schacht'
@@ -442,7 +442,7 @@ def generate_bom(request):
             
             bom_item = BOMItem.objects.create(
                 configuration=config,
-                artikelnummer=hvb.artikelnummer,
+                artikelnummer=format_artikelnummer(hvb.artikelnummer),
                 artikelbezeichnung=artikelbezeichnung,
                 menge=quantity,
                 calculated_quantity=calculated if hvb.menge_formel else None,
@@ -480,7 +480,7 @@ def generate_bom(request):
                 if total_qty > 0:
                     bom_item = BOMItem.objects.create(
                         configuration=config,
-                        artikelnummer=sonde.artikelnummer,
+                        artikelnummer=format_artikelnummer(sonde.artikelnummer),
                         artikelbezeichnung=sonde.artikelbezeichnung,
                         menge=total_qty,
                         source_table='Sondengroesse'
@@ -532,7 +532,7 @@ def generate_bom(request):
                         
                         bom_item = BOMItem.objects.create(
                             configuration=config,
-                            artikelnummer=kugelhahn.artikelnummer,
+                            artikelnummer=format_artikelnummer(kugelhahn.artikelnummer),
                             artikelbezeichnung=kugelhahn.artikelbezeichnung,
                             menge=quantity,
                             source_table='Kugelhahn'
@@ -542,13 +542,14 @@ def generate_bom(request):
         # Add DFM items if selected
         if config.dfm_type:
             dfms = DFM.objects.filter(durchflussarmatur=config.dfm_type)
+            
             for dfm in dfms:
-                if dfm.artikelnummer:
+                if dfm.artikelnummer and dfm.artikelnummer.strip():
                     # Check compatibility
                     is_compatible = True
                     
                     # Check ET-HVB compatibility (if specified) - must match HVB
-                    if dfm.et_hvb:
+                    if dfm.et_hvb and dfm.et_hvb.strip():
                         is_compatible = check_compatibility(
                             dfm.et_hvb, 
                             config.hvb_size, 
@@ -557,7 +558,7 @@ def generate_bom(request):
                         )
                     
                     # Check ET-Sonden compatibility (if specified) - must match sonden
-                    if is_compatible and dfm.et_sonden:
+                    if is_compatible and dfm.et_sonden and dfm.et_sonden.strip():
                         is_compatible = check_compatibility(
                             dfm.et_sonden, 
                             config.hvb_size, 
@@ -566,7 +567,7 @@ def generate_bom(request):
                         )
                     
                     # Check DFM-HVB compatibility (if specified) - must match HVB
-                    if is_compatible and dfm.dfm_hvb:
+                    if is_compatible and dfm.dfm_hvb and dfm.dfm_hvb.strip():
                         is_compatible = check_compatibility(
                             dfm.dfm_hvb, 
                             config.hvb_size, 
@@ -577,14 +578,17 @@ def generate_bom(request):
                     # Only add if compatible
                     if is_compatible:
                         quantity = dfm.menge_statisch or Decimal('1')
-                        if dfm.menge_formel:
+                        print(f"DEBUG: Article {dfm.artikelnummer} - Static quantity: {dfm.menge_statisch}, Initial quantity: {quantity}")
+                        if dfm.menge_formel and dfm.menge_formel.strip():
                             calculated = calculate_formula(dfm.menge_formel, calc_context)
+                            print(f"DEBUG: Formula '{dfm.menge_formel}' calculated to: {calculated}")
                             if calculated is not None:
                                 quantity = calculated
+                        print(f"DEBUG: Final quantity for {dfm.artikelnummer}: {quantity}")
                         
                         bom_item = BOMItem.objects.create(
                             configuration=config,
-                            artikelnummer=dfm.artikelnummer,
+                            artikelnummer=format_artikelnummer(dfm.artikelnummer),
                             artikelbezeichnung=dfm.artikelbezeichnung,
                             menge=quantity,
                             source_table='DFM'
@@ -610,7 +614,7 @@ def generate_bom(request):
                 # Add to BOM items
                 bom_item = BOMItem.objects.create(
                     configuration=config,
-                    artikelnummer=gnx_article.artikelnummer,
+                    artikelnummer=format_artikelnummer(gnx_article.artikelnummer),
                     artikelbezeichnung=gnx_article.artikelbezeichnung,
                     menge=custom_quantity,
                     source_table='GNXChamberArticle'
