@@ -126,6 +126,7 @@ class Entlueftung(models.Model):
     artikelbezeichnung = models.CharField(max_length=200)
     menge_statisch = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
     menge_formel = models.CharField(max_length=200, blank=True, null=True)
+    et_hvb = models.CharField(max_length=200, blank=True, null=True)
     
     def __str__(self):
         return f"{self.name} - {self.artikelnummer}"
@@ -141,6 +142,7 @@ class Sondenverschlusskappe(models.Model):
     artikelbezeichnung = models.CharField(max_length=200)
     menge_statisch = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
     menge_formel = models.CharField(max_length=200, blank=True, null=True)
+    sonden_durchmesser = models.CharField(max_length=10, blank=True, null=True)
     
     def __str__(self):
         return f"{self.name} - {self.artikelnummer}"
@@ -156,6 +158,8 @@ class StumpfschweissEndkappe(models.Model):
     artikelbezeichnung = models.CharField(max_length=200)
     menge_statisch = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
     menge_formel = models.CharField(max_length=200, blank=True, null=True)
+    hvb_durchmesser = models.CharField(max_length=10, blank=True, null=True)
+    is_short_version = models.BooleanField(default=False)
     
     def __str__(self):
         return f"{self.name} - {self.artikelnummer}"
@@ -254,6 +258,8 @@ class BOMConfiguration(models.Model):
     anschlussart = models.CharField(max_length=50)
     kugelhahn_type = models.CharField(max_length=100, blank=True, null=True)
     dfm_type = models.CharField(max_length=100, blank=True, null=True)
+    dfm_category = models.CharField(max_length=50, blank=True, null=True)
+    bauform = models.CharField(max_length=1, choices=(('I', 'I-Form'), ('U', 'U-Form')), default='I')
     
     # Article number management
     mother_article_number = models.CharField(max_length=50, blank=True, null=True)

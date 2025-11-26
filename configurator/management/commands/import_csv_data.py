@@ -326,7 +326,8 @@ class Command(BaseCommand):
                         artikelnummer=row.get('Artikelnummer', ''),
                         artikelbezeichnung=row.get('Artikelbezeichnung', ''),
                         menge_statisch=self.safe_decimal(row.get('Menge Statisch')),
-                        menge_formel=row.get('Menge Formel', '')
+                        menge_formel=row.get('Menge Formel', ''),
+                        et_hvb=row.get('ET-HVB', '')
                     )
                     count += 1
         return count
@@ -342,12 +343,14 @@ class Command(BaseCommand):
             if any(row.values()):
                 name = row.get(list(row.keys())[0], '')
                 if name and name.strip():
+                    durchmesser = row.get('Sondenverschlusskappe') or name
                     Sondenverschlusskappe.objects.create(
                         name=name,
                         artikelnummer=row.get('Artikelnummer', ''),
                         artikelbezeichnung=row.get('Artikelbezeichnung', ''),
                         menge_statisch=self.safe_decimal(row.get('Menge Statisch')),
-                        menge_formel=row.get('Menge Formel', '')
+                        menge_formel=row.get('Menge Formel', ''),
+                        sonden_durchmesser=str(durchmesser).strip()
                     )
                     count += 1
         return count
@@ -363,12 +366,16 @@ class Command(BaseCommand):
             if any(row.values()):
                 name = row.get(list(row.keys())[0], '')
                 if name and name.strip():
+                    hvb_size = row.get('HVB')
+                    artikelbezeichnung = row.get('Artikelbezeichnung', '')
                     StumpfschweissEndkappe.objects.create(
                         name=name,
                         artikelnummer=row.get('Artikelnummer', ''),
-                        artikelbezeichnung=row.get('Artikelbezeichnung', ''),
+                        artikelbezeichnung=artikelbezeichnung,
                         menge_statisch=self.safe_decimal(row.get('Menge Statisch')),
-                        menge_formel=row.get('Menge Formel', '')
+                        menge_formel=row.get('Menge Formel', ''),
+                        hvb_durchmesser=str(hvb_size).strip() if hvb_size else None,
+                        is_short_version='kurz' in artikelbezeichnung.lower()
                     )
                     count += 1
         return count

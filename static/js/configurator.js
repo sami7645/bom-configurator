@@ -241,7 +241,7 @@ function updateDFMOptions() {
     const category = $('#dfmCategory').val();
     
     if (!category) {
-        $('#dfmType').html('<option value="">Erst Kategorie wählen...</option>').prop('disabled', true);
+        $('#dfmType').html('<option value="">Erst Kategorie wählen...</option>').prop('disabled', true).val('');
         return;
     }
     
@@ -357,6 +357,8 @@ function checkConfiguration() {
         anschlussart: $('#anschlussart').val(),
         kugelhahn_type: $('#kugelhahnType').val(),
         dfm_type: $('#dfmType').val(),
+        dfm_category: $('#dfmCategory').val(),
+        bauform: $('#bauform').val(),
         zuschlag_links: $('#zuschlagLinks').val(),
         zuschlag_rechts: $('#zuschlagRechts').val()
     };
@@ -390,10 +392,12 @@ function showConfigurationSummary() {
         ['Schachttyp', configurationData.schachttyp],
         ['HVB-Größe', `${configurationData.hvb_size}mm`],
         ['Sonden-Durchmesser', `${configurationData.sonden_durchmesser}mm`],
+        ['Bauform', configurationData.bauform === 'U' ? 'U-Form' : 'I-Form'],
         ['Anzahl Sonden', configurationData.sondenanzahl],
         ['Sondenabstand', `${configurationData.sondenabstand}mm`],
         ['Anschlussart', configurationData.anschlussart],
         ['Kugelhahn-Typ', configurationData.kugelhahn_type || 'Nicht ausgewählt'],
+        ['DFM-Kategorie', configurationData.dfm_category || 'Nicht ausgewählt'],
         ['DFM-Typ', configurationData.dfm_type || 'Nicht ausgewählt']
     ];
     
@@ -464,6 +468,12 @@ function showArticleNumberStatus(data) {
 function generateBOM() {
     const generateBtn = $('#generateBomBtn');
     BOMConfigurator.showLoading(generateBtn);
+    
+    // Refresh dynamic fields before sending
+    configurationData.dfm_category = $('#dfmCategory').val();
+    configurationData.dfm_type = $('#dfmType').val();
+    configurationData.kugelhahn_type = $('#kugelhahnType').val();
+    configurationData.bauform = $('#bauform').val();
     
     // Update configuration data with article numbers
     if ($('#childArticleNumber').length) {
