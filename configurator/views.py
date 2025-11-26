@@ -13,6 +13,17 @@ from .models import (
 )
 
 
+def format_artikelnummer(artikelnummer):
+    """Format article number by removing .0 suffix if present"""
+    if not artikelnummer:
+        return ''
+    artikelnummer = str(artikelnummer).strip()
+    # Remove trailing .0 if it exists (e.g., "2001151.0" -> "2001151")
+    if artikelnummer.endswith('.0'):
+        artikelnummer = artikelnummer[:-2]
+    return artikelnummer
+
+
 def index(request):
     """Main configurator page"""
     context = {
