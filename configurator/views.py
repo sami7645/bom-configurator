@@ -382,22 +382,50 @@ def generate_bom(request):
     data = json.loads(request.body)
     
     try:
+        # Validate required fields
+        required_fields = ['schachttyp', 'hvb_size', 'sonden_durchmesser', 'sondenanzahl', 'sondenabstand', 'anschlussart']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            return JsonResponse({
+                'success': False,
+                'error': f'Fehlende Pflichtfelder: {", ".join(missing_fields)}',
+                'message': f'Bitte füllen Sie alle Pflichtfelder aus: {", ".join(missing_fields)}'
+            })
+        
+        # Safely convert to int with defaults
+        sondenanzahl = data.get('sondenanzahl', 0)
+        sondenabstand = data.get('sondenabstand', 0)
+        zuschlag_links = data.get('zuschlag_links', 100)
+        zuschlag_rechts = data.get('zuschlag_rechts', 100)
+        
+        try:
+            sondenanzahl = int(sondenanzahl) if sondenanzahl else 0
+            sondenabstand = int(sondenabstand) if sondenabstand else 0
+            zuschlag_links = int(zuschlag_links) if zuschlag_links else 100
+            zuschlag_rechts = int(zuschlag_rechts) if zuschlag_rechts else 100
+        except (ValueError, TypeError) as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Ungültige Zahlenwerte: {str(e)}',
+                'message': 'Bitte überprüfen Sie die eingegebenen Zahlenwerte.'
+            })
+        
         # Create BOM configuration
         config = BOMConfiguration.objects.create(
             name=data.get('configuration_name', 'Neue Konfiguration'),
             schachttyp=data.get('schachttyp'),
             hvb_size=data.get('hvb_size'),
             sonden_durchmesser=data.get('sonden_durchmesser'),
-            sondenanzahl=int(data.get('sondenanzahl', 0)),
-            sondenabstand=int(data.get('sondenabstand', 0)),
+            sondenanzahl=sondenanzahl,
+            sondenabstand=sondenabstand,
             anschlussart=data.get('anschlussart'),
             kugelhahn_type=data.get('kugelhahn_type', ''),
             dfm_type=data.get('dfm_type', ''),
             mother_article_number=data.get('mother_article_number', ''),
             child_article_number=data.get('child_article_number', ''),
             full_article_number=data.get('full_article_number', ''),
-            zuschlag_links=int(data.get('zuschlag_links', 100)),
-            zuschlag_rechts=int(data.get('zuschlag_rechts', 100))
+            zuschlag_links=zuschlag_links,
+            zuschlag_rechts=zuschlag_rechts
         )
         
         # Calculate context for formulas
@@ -637,10 +665,15 @@ def generate_bom(request):
         })
         
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"BOM Generation Error: {str(e)}")
+        print(f"Traceback: {error_trace}")
         return JsonResponse({
             'success': False,
             'error': str(e),
-            'message': 'Fehler beim Generieren der BOM'
+            'message': f'Fehler beim Generieren der BOM: {str(e)}',
+            'traceback': error_trace
         })
 
 

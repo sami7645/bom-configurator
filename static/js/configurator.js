@@ -503,9 +503,23 @@ function generateBOM() {
                 BOMConfigurator.showAlert(data.message || 'Fehler beim Generieren der BOM.', 'danger');
             }
         },
-        error: function() {
+        error: function(xhr, status, error) {
             BOMConfigurator.hideLoading(generateBtn);
-            BOMConfigurator.showAlert('Fehler beim Generieren der BOM.', 'danger');
+            let errorMessage = 'Fehler beim Generieren der BOM.';
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                errorMessage = xhr.responseJSON.message;
+            } else if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorMessage = `Fehler: ${xhr.responseJSON.error}`;
+            } else if (xhr.responseText) {
+                try {
+                    const errorData = JSON.parse(xhr.responseText);
+                    errorMessage = errorData.message || errorData.error || errorMessage;
+                } catch (e) {
+                    errorMessage = `Fehler: ${xhr.status} ${xhr.statusText}`;
+                }
+            }
+            console.error('BOM Generation Error:', xhr.responseJSON || xhr.responseText);
+            BOMConfigurator.showAlert(errorMessage, 'danger');
         }
     });
 }
