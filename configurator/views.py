@@ -662,11 +662,13 @@ def generate_bom(request):
         # Prepare response data
         bom_data = []
         for item in bom_items:
-            print(f"DEBUG JSON: Article {item.artikelnummer}, Menge in DB: {item.menge}, Type: {type(item.menge)}, String: {str(item.menge)}, Float: {float(item.menge)}")
+            # Convert Decimal to float for JSON serialization to avoid any scaling issues
+            menge_value = float(item.menge)
+            print(f"DEBUG JSON: Article {item.artikelnummer}, Menge in DB: {item.menge}, Float: {menge_value}, String: {str(menge_value)}")
             bom_data.append({
                 'artikelnummer': item.artikelnummer,
                 'artikelbezeichnung': item.artikelbezeichnung,
-                'menge': str(item.menge),
+                'menge': menge_value,  # Use float instead of string to ensure correct serialization
                 'source': item.source_table
             })
         
