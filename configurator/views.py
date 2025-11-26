@@ -578,13 +578,10 @@ def generate_bom(request):
                     # Only add if compatible
                     if is_compatible:
                         quantity = dfm.menge_statisch or Decimal('1')
-                        print(f"DEBUG: Article {dfm.artikelnummer} - Static quantity: {dfm.menge_statisch}, Initial quantity: {quantity}")
                         if dfm.menge_formel and dfm.menge_formel.strip():
                             calculated = calculate_formula(dfm.menge_formel, calc_context)
-                            print(f"DEBUG: Formula '{dfm.menge_formel}' calculated to: {calculated}")
                             if calculated is not None:
                                 quantity = calculated
-                        print(f"DEBUG: Final quantity for {dfm.artikelnummer}: {quantity}")
                         
                         bom_item = BOMItem.objects.create(
                             configuration=config,
