@@ -515,6 +515,7 @@ def generate_bom(request):
                 
                 # Multiply by sondenanzahl to get total length for all sonden
                 total_qty = (vorlauf_qty + ruecklauf_qty) * Decimal(str(config.sondenanzahl))
+                print(f"DEBUG Sonden: Vorlauf={vorlauf_qty}, Ruecklauf={ruecklauf_qty}, Sondenanzahl={config.sondenanzahl}, Total={total_qty}")
                 
                 if total_qty > 0:
                     bom_item = BOMItem.objects.create(
@@ -524,6 +525,7 @@ def generate_bom(request):
                         menge=total_qty,
                         source_table='Sondengroesse'
                     )
+                    print(f"DEBUG BOMItem created: Menge={bom_item.menge}, Type={type(bom_item.menge)}, String={str(bom_item.menge)}")
                     bom_items.append(bom_item)
         
         # Add Kugelhahn items if selected
@@ -660,6 +662,7 @@ def generate_bom(request):
         # Prepare response data
         bom_data = []
         for item in bom_items:
+            print(f"DEBUG JSON: Article {item.artikelnummer}, Menge in DB: {item.menge}, Type: {type(item.menge)}, String: {str(item.menge)}, Float: {float(item.menge)}")
             bom_data.append({
                 'artikelnummer': item.artikelnummer,
                 'artikelbezeichnung': item.artikelbezeichnung,
