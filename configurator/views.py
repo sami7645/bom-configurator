@@ -393,9 +393,9 @@ def generate_bom(request):
     data = json.loads(request.body)
     
     try:
-        # Validate required fields
+        # Validate required fields (check for None, not falsy values, since 0 is valid)
         required_fields = ['schachttyp', 'hvb_size', 'sonden_durchmesser', 'sondenanzahl', 'sondenabstand', 'anschlussart']
-        missing_fields = [field for field in required_fields if not data.get(field)]
+        missing_fields = [field for field in required_fields if data.get(field) is None or data.get(field) == '']
         if missing_fields:
             return JsonResponse({
                 'success': False,
