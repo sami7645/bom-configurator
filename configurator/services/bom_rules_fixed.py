@@ -152,7 +152,7 @@ def build_sondenverschlusskappen(config) -> List[Dict]:
             "artikelnummer": cap.artikelnummer,
             "artikelbezeichnung": cap.artikelbezeichnung,
             "menge": quantity,
-            "source": "Sondenverschlusskappe",
+            "source_table": "Sondenverschlusskappe",
         }
     ]
 
@@ -167,7 +167,7 @@ def build_sondenverschlusskappen(config) -> List[Dict]:
                     "artikelnummer": hvb_cap.artikelnummer,
                     "artikelbezeichnung": hvb_cap.artikelbezeichnung,
                     "menge": _decimal(2),
-                    "source": "Sondenverschlusskappe",
+                    "source_table": "Sondenverschlusskappe",
                 }
             )
 
@@ -187,7 +187,7 @@ def build_stumpfschweiss_endkappen(config) -> List[Dict]:
                 "artikelnummer": cap_obj.artikelnummer,
                 "artikelbezeichnung": cap_obj.artikelbezeichnung,
                 "menge": _decimal(qty),
-                "source": "Stumpfschweiss-Endkappe",
+                "source_table": "Stumpfschweiss-Endkappe",
             }
         )
 
@@ -229,7 +229,7 @@ def build_entlueftung_components(config) -> List[Dict]:
                 "artikelnummer": part.artikelnummer,
                 "artikelbezeichnung": part.artikelbezeichnung,
                 "menge": qty,
-                "source": "Entlüftung",
+                "source_table": "Entlüftung",
             }
         )
     return items
@@ -244,7 +244,7 @@ def build_manifold_components(config) -> List[Dict]:
                 "artikelnummer": "2001433",
                 "artikelbezeichnung": "Absperrventil Kunststoff - Kugelhahn Standard Verteiler Luke",
                 "menge": _decimal(config.sondenanzahl),
-                "source": "Manifold",
+                "source_table": "Manifold",
             }
         )
     return items
@@ -291,7 +291,7 @@ def build_plastic_dfm_components(config) -> List[Dict]:
                     "artikelnummer": entry.artikelnummer.split(".")[0],
                     "artikelbezeichnung": entry.artikelbezeichnung,
                     "menge": qty,
-                    "source": "DFM",
+                    "source_table": "DFM",
                 }
             )
     return items
@@ -335,7 +335,7 @@ def build_kugelhahn_components(config) -> List[Dict]:
                 "artikelnummer": article_number,
                 "artikelbezeichnung": bezeichnung,
                 "menge": quantity,
-                "source": "Kugelhahn",
+                "source_table": "Kugelhahn",
             }
         )
 

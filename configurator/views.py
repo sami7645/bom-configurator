@@ -614,7 +614,7 @@ def generate_bom(request):
                     'artikelnummer': component['artikelnummer'],
                     'artikelbezeichnung': component['artikelbezeichnung'],
                     'menge': component['menge'],
-                    'source': component['source']
+                    'source_table': component.get('source_table', component.get('source', 'Unknown'))
                 }
 
         for component in component_map.values():
@@ -623,7 +623,7 @@ def generate_bom(request):
                 artikelnummer=format_artikelnummer(component['artikelnummer']),
                 artikelbezeichnung=component['artikelbezeichnung'],
                 menge=component['menge'],
-                source_table=component['source']
+                source_table=component['source_table']
             )
             bom_items.append(bom_item)
         
