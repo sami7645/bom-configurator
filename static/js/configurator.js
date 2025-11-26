@@ -547,12 +547,24 @@ function showBOMResult(data) {
     `;
     
     data.bom_items.forEach(function(item, index) {
+        let mengeValue = parseFloat(item.menge);
+        console.log(`DEBUG JS: Article ${item.artikelnummer}, Raw menge: ${item.menge}, Type: ${typeof item.menge}, Parsed: ${mengeValue}`);
+        
+        // Check if value seems suspiciously large (might be 1000x too large)
+        // For most BOM items, quantities should be reasonable (less than 1000 for single items)
+        if (mengeValue > 100 && mengeValue % 1000 === 0 && mengeValue < 100000) {
+            console.warn(`WARNING: Suspiciously large value ${mengeValue} for article ${item.artikelnummer} - might be 1000x too large!`);
+            console.warn(`If divided by 1000, would be: ${mengeValue / 1000}`);
+        }
+        
+        const formattedMenge = BOMConfigurator.formatNumber(mengeValue, 3);
+        console.log(`DEBUG JS: Formatted: ${formattedMenge}`);
         html += `
             <tr>
                 <td>${index + 1}</td>
                 <td><code>${item.artikelnummer}</code></td>
                 <td>${item.artikelbezeichnung}</td>
-                <td>${BOMConfigurator.formatNumber(item.menge, 3)}</td>
+                <td>${formattedMenge}</td>
                 <td><span class="badge bg-secondary">${item.source}</span></td>
             </tr>
         `;

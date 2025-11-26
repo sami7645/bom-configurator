@@ -82,7 +82,25 @@ function showAlert(message, type = 'info') {
 }
 
 function formatNumber(num, decimals = 2) {
-    return parseFloat(num).toFixed(decimals).replace('.', ',');
+    const value = parseFloat(num);
+    if (isNaN(value)) {
+        return '0';
+    }
+    
+    // If the value is a whole number, show it without decimals
+    if (value % 1 === 0) {
+        return value.toString();
+    }
+    
+    // For decimal numbers, format with specified decimals
+    // Remove trailing zeros and replace . with , for German format
+    let formatted = value.toFixed(decimals);
+    // Remove trailing zeros
+    formatted = formatted.replace(/\.?0+$/, '');
+    // Replace . with , for German decimal separator
+    formatted = formatted.replace('.', ',');
+    
+    return formatted;
 }
 
 function formatCurrency(amount) {
