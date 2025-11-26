@@ -1,26 +1,23 @@
 def calculate_hvb_length(config):
-    # Use fixed quantities from reference BOM for GN 1
-    if config.schachttyp == 'GN 1':
-        if str(config.hvb_size) == '63':
-            return Decimal('2.4')  # Reference shows 2.4m for HVB 63
-        else:
-            return Decimal('1.4')  # Default for other HVB sizes
-    
-    # Calculate for other chamber types
+    # Calculate HVB length using proper formulas
     try:
         sondenanzahl = Decimal(config.sondenanzahl)
         distance = Decimal(config.sondenabstand)
-        zuschlag_links = Decimal(config.zuschlag_links or 0)
-        zuschlag_rechts = Decimal(config.zuschlag_rechts or 0)
+        zuschlag_links = Decimal(config.zuschlag_links or 100)
+        zuschlag_rechts = Decimal(config.zuschlag_rechts or 100)
     except Exception:
         return None
 
     if sondenanzahl <= 1 or distance <= 0:
         return None
 
-    if config.bauform == 'U':
-        base = (sondenanzahl - 1) * 2 * distance * 2
+    # Use U-form for chambers with multiple probes, I-form for manifolds
+    if config.schachttyp == 'Verteiler' or config.bauform == 'I':
+        # I-form formula: (sondenanzahl - 1) * sondenabstand * 2 + zuschläge
+        base = (sondenanzahl - 1) * distance * 2
     else:
+        # U-form formula for chambers: (sondenanzahl - 1) * sondenabstand * 2 + zuschläge
+        # Note: The spec shows both formulas are actually the same for the base calculation
         base = (sondenanzahl - 1) * distance * 2
 
     total_mm = base + zuschlag_links + zuschlag_rechts
@@ -590,19 +587,14 @@ def generate_bom(request):
                 )
                 bom_items.append(bom_item)
         
-        # Use fixed BOM for GN 1 configurations
-        if config.schachttyp == 'GN 1':
-            from .services.bom_rules_fixed import build_gn1_reference_bom
-            additional_components = build_gn1_reference_bom(config)
-        else:
-            # Use rule-based builders for other configurations
-            additional_components = []
-            additional_components.extend(bom_rules.build_kugelhahn_components(config))
-            additional_components.extend(bom_rules.build_plastic_dfm_components(config))
-            additional_components.extend(bom_rules.build_sondenverschlusskappen(config))
-            additional_components.extend(bom_rules.build_stumpfschweiss_endkappen(config))
-            additional_components.extend(bom_rules.build_entlueftung_components(config))
-            additional_components.extend(bom_rules.build_manifold_components(config))
+        # Use rule-based builders for all configurations
+        additional_components = []
+        additional_components.extend(bom_rules.build_kugelhahn_components(config))
+        additional_components.extend(bom_rules.build_plastic_dfm_components(config))
+        additional_components.extend(bom_rules.build_sondenverschlusskappen(config))
+        additional_components.extend(bom_rules.build_stumpfschweiss_endkappen(config))
+        additional_components.extend(bom_rules.build_entlueftung_components(config))
+        additional_components.extend(bom_rules.build_manifold_components(config))
 
         component_map = {}
         for component in additional_components:
