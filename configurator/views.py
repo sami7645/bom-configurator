@@ -38,17 +38,7 @@ from .models import (
     BOMConfiguration, BOMItem, GNXChamberArticle, GNXChamberConfiguration
 )
 from .services import bom_rules
-
-
-def format_artikelnummer(artikelnummer):
-    """Format article number by removing .0 suffix if present"""
-    if not artikelnummer:
-        return ''
-    artikelnummer = str(artikelnummer).strip()
-    # Remove trailing .0 if it exists (e.g., "2001151.0" -> "2001151")
-    if artikelnummer.endswith('.0'):
-        artikelnummer = artikelnummer[:-2]
-    return artikelnummer
+from .utils import format_artikelnummer, calculate_formula, check_compatibility
 
 
 def index(request):
@@ -348,71 +338,6 @@ def get_gnx_chamber_articles(request):
     })
 
 
-def check_compatibility(compatibility_field, hvb_size, sonden_durchmesser, check_type='either'):
-    """
-    Check if an item is compatible with the selected HVB size and sonden diameter.
-    Compatibility field format: "DA 63|DA 75|DA 90" or "DA 32|DA 40"
-    
-    Args:
-        compatibility_field: The compatibility string from CSV
-        hvb_size: Selected HVB size (e.g., "63")
-        sonden_durchmesser: Selected sonden diameter (e.g., "32")
-        check_type: 'either' (default) or 'hvb' or 'sonden'
-    """
-    if not compatibility_field or not compatibility_field.strip():
-        return True  # No compatibility restriction means it's compatible
-    
-    # Format HVB size as "DA XX" (e.g., "63" -> "DA 63")
-    hvb_formatted = f"DA {hvb_size}"
-    
-    # Format sonden diameter as "DA XX" (e.g., "32" -> "DA 32")
-    sonden_formatted = f"DA {sonden_durchmesser}"
-    
-    # Parse compatible values
-    compatible_values = [v.strip() for v in compatibility_field.split('|')]
-    
-    # Check based on type
-    if check_type == 'hvb':
-        return hvb_formatted in compatible_values
-    elif check_type == 'sonden':
-        return sonden_formatted in compatible_values
-    else:  # 'either' - default
-        return hvb_formatted in compatible_values or sonden_formatted in compatible_values
-
-
-def calculate_formula(formula, context):
-    """Safely calculate formula with given context"""
-    if not formula or formula.strip() == '':
-        return None
-    
-    try:
-        # Remove Excel = prefix if present
-        safe_formula = formula.strip()
-        if safe_formula.startswith('='):
-            safe_formula = safe_formula[1:]
-        
-        # Replace variables in formula - sort by length (longest first) to avoid partial replacements
-        # e.g., replace 'sondenanzahl_min' before 'sondenanzahl'
-        sorted_keys = sorted(context.keys(), key=len, reverse=True)
-        for key in sorted_keys:
-            value = context[key]
-            # Use word boundaries to avoid partial matches
-            pattern = r'\b' + re.escape(key) + r'\b'
-            safe_formula = re.sub(pattern, str(value), safe_formula)
-        
-        # Only allow basic mathematical operations
-        allowed_chars = set('0123456789+-*/.() ')
-        if not all(c in allowed_chars for c in safe_formula):
-            return None
-        
-        # Evaluate the formula
-        result = eval(safe_formula)
-        return Decimal(str(result))
-    except Exception as e:
-        print(f"Formula calculation error: {e}")
-        return None
-
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def generate_bom(request):
@@ -589,9 +514,9 @@ def generate_bom(request):
         
         # Use rule-based builders for all configurations
         additional_components = []
-        additional_components.extend(bom_rules.build_kugelhahn_components(config))
-        additional_components.extend(bom_rules.build_plastic_dfm_components(config))
-        additional_components.extend(bom_rules.build_sondenverschlusskappen(config))
+        additional_components.extend(bom_rules.build_kugelhahn_components(config, calc_context))
+        additional_components.extend(bom_rules.build_plastic_dfm_components(config, calc_context))
+        additional_components.extend(bom_rules.build_sondenverschlusskappen(config, calc_context))
         additional_components.extend(bom_rules.build_stumpfschweiss_endkappen(config))
         additional_components.extend(bom_rules.build_entlueftung_components(config))
         additional_components.extend(bom_rules.build_manifold_components(config))
