@@ -262,7 +262,7 @@ def get_dfm_options(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def check_existing_configuration(request):
-    """Check if configuration already exists"""
+    """Check if configuration already exists - matches exact requirements from client"""
     data = json.loads(request.body)
     
     # Extract configuration parameters
@@ -272,18 +272,48 @@ def check_existing_configuration(request):
     sondenanzahl = data.get('sondenanzahl')
     sondenabstand = data.get('sondenabstand')
     anschlussart = data.get('anschlussart')
+    kugelhahn_type = data.get('kugelhahn_type', '') or ''
+    dfm_type = data.get('dfm_type', '') or ''
+    dfm_category = data.get('dfm_category', '') or ''
+    bauform = data.get('bauform', 'I') or 'I'
     
-    # Check for exact configuration match
-    existing_config = BOMConfiguration.objects.filter(
+    # Normalize empty strings to None for optional fields
+    kugelhahn_type = kugelhahn_type if kugelhahn_type else None
+    dfm_type = dfm_type if dfm_type else None
+    dfm_category = dfm_category if dfm_category else None
+    
+    # STEP 1: Check if exact configuration exists (all parameters match)
+    # This includes optional fields - if they're None, match None; if they have values, match values
+    query = BOMConfiguration.objects.filter(
         schachttyp=schachttyp,
         hvb_size=hvb_size,
         sonden_durchmesser=sonden_durchmesser,
         sondenanzahl=sondenanzahl,
         sondenabstand=sondenabstand,
-        anschlussart=anschlussart
-    ).first()
+        anschlussart=anschlussart,
+        bauform=bauform
+    )
     
-    if existing_config:
+    # Handle optional fields - match None if not provided, or match value if provided
+    if kugelhahn_type is None:
+        query = query.filter(kugelhahn_type__isnull=True)
+    else:
+        query = query.filter(kugelhahn_type=kugelhahn_type)
+    
+    if dfm_type is None:
+        query = query.filter(dfm_type__isnull=True)
+    else:
+        query = query.filter(dfm_type=dfm_type)
+    
+    if dfm_category is None:
+        query = query.filter(dfm_category__isnull=True)
+    else:
+        query = query.filter(dfm_category=dfm_category)
+    
+    existing_config = query.first()
+    
+    if existing_config and existing_config.full_article_number:
+        # Exact configuration exists with article number
         return JsonResponse({
             'exists': True,
             'type': 'full_configuration',
@@ -292,28 +322,71 @@ def check_existing_configuration(request):
             'message': f'Diese Konfiguration existiert bereits mit Artikelnummer: {existing_config.full_article_number}'
         })
     
-    # Check for mother article (same base config, different details)
+    # STEP 2: Check if mother article exists (base configuration match)
+    # Mother article is defined by: schachttyp, hvb_size, sonden_durchmesser
+    # Find any configuration with these base parameters that has a mother_article_number
     mother_config = BOMConfiguration.objects.filter(
         schachttyp=schachttyp,
         hvb_size=hvb_size,
-        sonden_durchmesser=sonden_durchmesser
-    ).first()
+        sonden_durchmesser=sonden_durchmesser,
+        mother_article_number__isnull=False
+    ).exclude(mother_article_number='').first()
     
     if mother_config and mother_config.mother_article_number:
-        # Generate next child number
+        # Check if this exact configuration already has a child article
+        # (i.e., does this exact config exist as a child of this mother?)
+        existing_child = BOMConfiguration.objects.filter(
+            schachttyp=schachttyp,
+            hvb_size=hvb_size,
+            sonden_durchmesser=sonden_durchmesser,
+            sondenanzahl=sondenanzahl,
+            sondenabstand=sondenabstand,
+            anschlussart=anschlussart,
+            bauform=bauform,
+            kugelhahn_type=kugelhahn_type,
+            dfm_type=dfm_type,
+            dfm_category=dfm_category,
+            mother_article_number=mother_config.mother_article_number
+        ).exclude(child_article_number__isnull=True).exclude(child_article_number='').first()
+        
+        if existing_child and existing_child.child_article_number:
+            # This exact configuration already exists as a child
+            full_article = f"{mother_config.mother_article_number}-{existing_child.child_article_number.split('-')[-1]}"
+            return JsonResponse({
+                'exists': True,
+                'type': 'full_configuration',
+                'article_number': full_article,
+                'configuration_id': existing_child.id,
+                'message': f'Diese Konfiguration existiert bereits mit Artikelnummer: {full_article}'
+            })
+        
+        # Mother article exists, but this exact configuration doesn't have a child article yet
+        # Find the highest child number and suggest the next one
         existing_children = BOMConfiguration.objects.filter(
             mother_article_number=mother_config.mother_article_number
-        ).count()
-        next_child_number = f"{mother_config.mother_article_number}-{existing_children + 1:03d}"
+        ).exclude(child_article_number__isnull=True).exclude(child_article_number='')
+        
+        # Extract child numbers and find the highest
+        max_child_num = 0
+        for child in existing_children:
+            child_num_str = child.child_article_number.split('-')[-1] if '-' in child.child_article_number else child.child_article_number
+            try:
+                child_num = int(child_num_str)
+                max_child_num = max(max_child_num, child_num)
+            except ValueError:
+                pass
+        
+        next_child_number = f"{mother_config.mother_article_number}-{max_child_num + 1:03d}"
         
         return JsonResponse({
             'exists': True,
             'type': 'mother_article',
             'mother_article_number': mother_config.mother_article_number,
             'suggested_child_number': next_child_number,
-            'message': f'Mutterartikel existiert: {mother_config.mother_article_number}. Vorgeschlagene Kindnummer: {next_child_number}'
+            'message': f'Mutterartikel "{mother_config.mother_article_number}" existiert bereits, aber es gibt keine Kindartikelnummer zu dieser Konfiguration.'
         })
     
+    # STEP 3: No match found - new configuration
     return JsonResponse({
         'exists': False,
         'type': 'new_configuration',
@@ -373,6 +446,32 @@ def generate_bom(request):
                 'message': 'Bitte überprüfen Sie die eingegebenen Zahlenwerte.'
             })
         
+        # Handle article number logic
+        mother_article_number = data.get('mother_article_number', '') or ''
+        child_article_number = data.get('child_article_number', '') or ''
+        full_article_number = data.get('full_article_number', '') or ''
+        
+        # If child_article_number is provided in format "1000089-002", extract mother and child
+        if child_article_number and '-' in child_article_number:
+            parts = child_article_number.split('-', 1)
+            if not mother_article_number:
+                mother_article_number = parts[0]
+            if len(parts) > 1:
+                child_article_number = parts[1]
+            if not full_article_number:
+                full_article_number = child_article_number  # Use the full format provided
+        
+        # If full_article_number is provided in format "1000089-002", extract mother and child
+        if full_article_number and '-' in full_article_number and not mother_article_number:
+            parts = full_article_number.split('-', 1)
+            mother_article_number = parts[0]
+            if len(parts) > 1:
+                child_article_number = parts[1]
+        
+        # If we have mother and child, construct full_article_number
+        if mother_article_number and child_article_number and not full_article_number:
+            full_article_number = f"{mother_article_number}-{child_article_number}"
+        
         # Create BOM configuration
         config = BOMConfiguration.objects.create(
             name=data.get('configuration_name', 'Neue Konfiguration'),
@@ -382,13 +481,13 @@ def generate_bom(request):
             sondenanzahl=sondenanzahl,
             sondenabstand=sondenabstand,
             anschlussart=data.get('anschlussart'),
-            kugelhahn_type=data.get('kugelhahn_type', ''),
-            dfm_type=data.get('dfm_type', ''),
-            dfm_category=data.get('dfm_category', ''),
+            kugelhahn_type=data.get('kugelhahn_type', '') or None,
+            dfm_type=data.get('dfm_type', '') or None,
+            dfm_category=data.get('dfm_category', '') or None,
             bauform=data.get('bauform', 'I') or 'I',
-            mother_article_number=data.get('mother_article_number', ''),
-            child_article_number=data.get('child_article_number', ''),
-            full_article_number=data.get('full_article_number', ''),
+            mother_article_number=mother_article_number or None,
+            child_article_number=child_article_number or None,
+            full_article_number=full_article_number or None,
             zuschlag_links=zuschlag_links,
             zuschlag_rechts=zuschlag_rechts
         )

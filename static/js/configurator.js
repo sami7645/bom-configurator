@@ -21,6 +21,101 @@ $(document).ready(function() {
     $('#schachttyp').on('change', checkGNXChamber);
     $('#hvbSize').on('change', loadGNXArticles);
     $('#dfmCategory').on('change', updateDFMOptions);
+    
+    // Length calculation display updates
+    const lengthInputs = '#sondenanzahl, #sondenabstand, #zuschlagLinks, #zuschlagRechts, #bauform, #anschlussart';
+    $(lengthInputs).on('input change', updateLengthDisplays);
+    $('#hvbSize').on('change', updateLengthDisplays);
+    
+    // Alternative calculation inputs
+    $('#sondenabstandAlt, #anschlussartAlt').on('change', updateProbeDistanceDisplay);
+    
+    // When alternative dropdown is clicked/focused, ensure it has options
+    $('#sondenabstandAlt').on('focus click', function() {
+        console.log('Alternative dropdown focused/clicked - checking if it has options...');
+        const altDropdown = $(this);
+        const mainDropdown = $('#sondenabstand');
+        
+        if (altDropdown.find('option').length <= 1 && mainDropdown.find('option').length > 1) {
+            console.log('Alternative dropdown is empty but main has options - syncing now...');
+            syncAlternativeSondenabstandDropdown();
+        }
+    });
+    
+    // Sync sondenabstandAlt with main sondenabstand
+    // This ensures alternative dropdown ALWAYS has the same options
+    $('#sondenabstand').on('change DOMSubtreeModified', function() {
+        const val = $(this).val();
+        // Always ensure alternative dropdown has the same options as main dropdown
+        console.log('Main sondenabstand changed, syncing alternative dropdown...');
+        syncAlternativeSondenabstandDropdown();
+        updateLengthDisplays();
+    });
+    
+    // Also watch for when options are added to main dropdown
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.target.id === 'sondenabstand') {
+                console.log('Main sondenabstand options changed, syncing...');
+                syncAlternativeSondenabstandDropdown();
+            }
+        });
+    });
+    
+    // Start observing when main dropdown exists
+    setTimeout(function() {
+        const mainDropdown = document.getElementById('sondenabstand');
+        if (mainDropdown) {
+            observer.observe(mainDropdown, { childList: true, subtree: true });
+            console.log('Started observing main sondenabstand dropdown for changes');
+        }
+    }, 1000);
+    
+    // Sync anschlussartAlt with main anschlussart
+    $('#anschlussart').on('change', function() {
+        const val = $(this).val();
+        $('#anschlussartAlt').val(val);
+        // updateSondenabstandOptions will be called by the other handler, which will populate the alternative sondenabstand dropdown
+        updateLengthDisplays();
+    });
+    
+    // Initial update
+    updateLengthDisplays();
+    
+    // Watch for when Step 2 becomes visible and ensure alternative dropdown is populated
+    const step2Observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            const step2Element = document.getElementById('config-step-2');
+            if (step2Element && !step2Element.classList.contains('d-none')) {
+                // Step 2 is visible, check if alternative dropdown needs options
+                setTimeout(function() {
+                    const mainDropdown = document.getElementById('sondenabstand');
+                    const altDropdown = document.getElementById('sondenabstandAlt');
+                    
+                    if (mainDropdown && altDropdown && mainDropdown.options.length > 1 && altDropdown.options.length <= 1) {
+                        console.log('Step 2 visible - populating alternative dropdown from main dropdown');
+                        altDropdown.innerHTML = mainDropdown.innerHTML;
+                        if (mainDropdown.value) {
+                            altDropdown.value = mainDropdown.value;
+                        }
+                    }
+                }, 100);
+            }
+        });
+    });
+    
+    // Start observing the step container
+    setTimeout(function() {
+        const stepContainer = document.querySelector('.container-fluid');
+        if (stepContainer) {
+            step2Observer.observe(stepContainer, { 
+                childList: true, 
+                subtree: true, 
+                attributes: true,
+                attributeFilter: ['class']
+            });
+        }
+    }, 500);
 });
 
 function initializeValidation() {
@@ -72,16 +167,64 @@ function nextStep(step) {
     $(`#step-${currentStep}`).removeClass('active').addClass('completed');
     $(`#step-${step}`).addClass('active');
     
-    // Show next step
+    // Show next step FIRST so elements are in DOM
     $(`#config-step-${step}`).removeClass('d-none').addClass('fade-in');
     
     currentStep = step;
     
     // Ensure sonden options are loaded when entering step 2
     if (step === 2) {
+        // Wait a bit for DOM to be ready
         setTimeout(function() {
+            console.log('=== Entering Step 2 ===');
+            const altDropdownExists = $('#sondenabstandAlt').length > 0;
+            const altDropdownDomExists = document.getElementById('sondenabstandAlt') !== null;
+            console.log('sondenabstandAlt (jQuery) exists:', altDropdownExists);
+            console.log('sondenabstandAlt (DOM) exists:', altDropdownDomExists);
+            
             updateSondenOptions();
-        }, 150);
+            // Sync anschlussartAlt immediately
+            $('#anschlussartAlt').val($('#anschlussart').val());
+            
+            // If anschlussart is already selected, make sure sondenabstand options are loaded
+            if ($('#anschlussart').val()) {
+                // Check if main dropdown already has options (from previous step)
+                const mainOptionCount = $('#sondenabstand option').length;
+                console.log('Main dropdown has', mainOptionCount, 'options');
+                
+                if (mainOptionCount > 1) {
+                    // Copy existing options to alternative dropdown immediately
+                    console.log('Syncing from existing main dropdown options...');
+                    syncAlternativeSondenabstandDropdown();
+                }
+                
+                // Also call API to ensure we have the latest options (this will also sync)
+                console.log('Calling updateSondenabstandOptions...');
+                updateSondenabstandOptions();
+            } else {
+                // If no anschlussart, clear alternative dropdown
+                if (altDropdownExists) {
+                    $('#sondenabstandAlt').html('<option value="">Erst Anschlussart wählen...</option>');
+                }
+                if (altDropdownDomExists) {
+                    document.getElementById('sondenabstandAlt').innerHTML = '<option value="">Erst Anschlussart wählen...</option>';
+                }
+            }
+            
+            // Update displays after a delay to ensure dropdowns are populated
+            setTimeout(function() {
+                // Final sync check to ensure alternative dropdown is populated
+                console.log('=== Final sync check ===');
+                const synced = syncAlternativeSondenabstandDropdown();
+                if (!synced) {
+                    console.warn('Sync failed, retrying in 200ms...');
+                    setTimeout(function() {
+                        syncAlternativeSondenabstandDropdown();
+                    }, 200);
+                }
+                updateLengthDisplays();
+            }, 1000);
+        }, 300);
     }
     
     // Special handling for step 4 (configuration check)
@@ -101,16 +244,60 @@ function previousStep(step) {
     $(`#step-${currentStep}`).removeClass('active');
     $(`#step-${step}`).removeClass('completed').addClass('active');
     
-    // Show previous step
+    // Show previous step FIRST so elements are in DOM
     $(`#config-step-${step}`).removeClass('d-none').addClass('fade-in');
     
     currentStep = step;
     
     // Ensure sonden options are loaded when going back to step 2
     if (step === 2) {
+        // Wait a bit for DOM to be ready
         setTimeout(function() {
+            console.log('Returning to Step 2 - checking dropdowns...');
+            console.log('sondenabstandAlt exists:', $('#sondenabstandAlt').length > 0);
+            
             updateSondenOptions();
-        }, 150);
+            // Sync anschlussartAlt immediately
+            $('#anschlussartAlt').val($('#anschlussart').val());
+            // If anschlussart is already selected, make sure sondenabstand options are loaded
+            if ($('#anschlussart').val()) {
+                // Check if main dropdown already has options (from previous step)
+                if ($('#sondenabstand option').length > 1) {
+                    // Copy existing options to alternative dropdown immediately
+                    console.log('Syncing from existing main dropdown options...');
+                    syncAlternativeSondenabstandDropdown();
+                }
+                // Also call API to ensure we have the latest options (this will also sync)
+                console.log('Calling updateSondenabstandOptions...');
+                updateSondenabstandOptions();
+            } else {
+                // If no anschlussart, clear alternative dropdown
+                $('#sondenabstandAlt').html('<option value="">Erst Anschlussart wählen...</option>');
+            }
+            // Update displays after a delay to ensure dropdowns are populated
+            setTimeout(function() {
+                // Final sync check to ensure alternative dropdown is populated
+                console.log('=== Final sync check ===');
+                const synced = syncAlternativeSondenabstandDropdown();
+                if (!synced) {
+                    console.warn('Sync failed, retrying in 200ms...');
+                    setTimeout(function() {
+                        syncAlternativeSondenabstandDropdown();
+                    }, 200);
+                }
+                updateLengthDisplays();
+            }, 800);
+            
+            // Also try to sync immediately when Step 2 becomes visible
+            // Use a MutationObserver to detect when Step 2 is shown
+            setTimeout(function() {
+                const step2Element = document.getElementById('config-step-2');
+                if (step2Element && !step2Element.classList.contains('d-none')) {
+                    console.log('Step 2 is visible, forcing sync...');
+                    syncAlternativeSondenabstandDropdown();
+                }
+            }, 300);
+        }, 200);
     }
     
     // Scroll to top
@@ -185,11 +372,104 @@ function updateSondenOptions() {
     });
 }
 
+function syncAlternativeSondenabstandDropdown() {
+    // Helper function to sync alternative dropdown with main dropdown
+    console.log('=== syncAlternativeSondenabstandDropdown called ===');
+    
+    // Use native DOM for more reliable access
+    const mainDropdownDom = document.getElementById('sondenabstand');
+    const altDropdownDom = document.getElementById('sondenabstandAlt');
+    
+    const mainDropdown = $('#sondenabstand');
+    const altDropdown = $('#sondenabstandAlt');
+    
+    console.log('Main dropdown (jQuery) exists:', mainDropdown.length > 0);
+    console.log('Main dropdown (DOM) exists:', mainDropdownDom !== null);
+    console.log('Alt dropdown (jQuery) exists:', altDropdown.length > 0);
+    console.log('Alt dropdown (DOM) exists:', altDropdownDom !== null);
+    
+    if (!mainDropdownDom && !mainDropdown.length) {
+        console.error('Main dropdown #sondenabstand not found!');
+        return false;
+    }
+    
+    if (!altDropdownDom && !altDropdown.length) {
+        console.error('Alternative dropdown #sondenabstandAlt not found!');
+        return false;
+    }
+    
+    // Get option count from main dropdown
+    const mainOptionCount = mainDropdownDom ? mainDropdownDom.options.length : mainDropdown.find('option').length;
+    const mainVal = mainDropdownDom ? mainDropdownDom.value : mainDropdown.val();
+    
+    console.log('Main dropdown options count:', mainOptionCount);
+    console.log('Main dropdown current value:', mainVal);
+    
+    // Check if main dropdown has valid options (more than just placeholder)
+    if (mainOptionCount > 1) {
+        console.log('Copying options to alternative dropdown...');
+        
+        // Use native DOM method - more reliable
+        if (altDropdownDom && mainDropdownDom) {
+            // Clear and rebuild options
+            altDropdownDom.innerHTML = '';
+            
+            // Copy each option
+            for (let i = 0; i < mainDropdownDom.options.length; i++) {
+                const option = mainDropdownDom.options[i];
+                const newOption = document.createElement('option');
+                newOption.value = option.value;
+                newOption.text = option.text;
+                // Copy data attributes if any
+                if (option.dataset) {
+                    Object.keys(option.dataset).forEach(key => {
+                        newOption.setAttribute('data-' + key, option.dataset[key]);
+                    });
+                }
+                altDropdownDom.appendChild(newOption);
+            }
+            
+            console.log('Copied', altDropdownDom.options.length, 'options via DOM method');
+            
+            // Set the value if main dropdown has a selection
+            if (mainVal && mainVal !== '') {
+                altDropdownDom.value = mainVal;
+                console.log('Set alternative dropdown value to:', mainVal);
+            }
+            
+            // Also try jQuery method as backup
+            if (altDropdown.length > 0) {
+                altDropdown.html(mainDropdown.html());
+                if (mainVal) {
+                    altDropdown.val(mainVal);
+                }
+            }
+            
+            console.log('=== Sync completed successfully ===');
+            return true;
+        } else if (altDropdown.length > 0 && mainDropdown.length > 0) {
+            // Fallback to jQuery
+            altDropdown.html(mainDropdown.html());
+            if (mainVal) {
+                altDropdown.val(mainVal);
+            }
+            console.log('=== Sync completed via jQuery ===');
+            return true;
+        }
+    } else {
+        console.log('Main dropdown has no valid options to sync (only placeholder)');
+        return false;
+    }
+    
+    return false;
+}
+
 function updateSondenabstandOptions() {
     const anschlussart = $('#anschlussart').val();
     
     if (!anschlussart) {
         $('#sondenabstand').html('<option value="">Erst Anschlussart wählen...</option>');
+        $('#sondenabstandAlt').html('<option value="">Erst Anschlussart wählen...</option>');
         return;
     }
     
@@ -203,6 +483,12 @@ function updateSondenabstandOptions() {
         success: function(data) {
             let options = '<option value="">Bitte wählen...</option>';
             let standardOption = null;
+            
+            if (!data.abstand_options || data.abstand_options.length === 0) {
+                $('#sondenabstand').html('<option value="">Keine Optionen verfügbar</option>');
+                $('#sondenabstandAlt').html('<option value="">Keine Optionen verfügbar</option>');
+                return;
+            }
             
             data.abstand_options.forEach(function(option) {
                 const hinweis = option.hinweis ? ` (${option.hinweis})` : '';
@@ -221,18 +507,107 @@ function updateSondenabstandOptions() {
                 }
             });
             
+            // Set main dropdown
             $('#sondenabstand').html(options);
+            console.log('Main sondenabstand dropdown populated with', data.abstand_options.length, 'options');
             
-            // If a standard option was found and selected, update the zuschläge fields
-            if (standardOption) {
-                $('#zuschlagLinks').val(standardOption.zuschlag_links);
-                $('#zuschlagRechts').val(standardOption.zuschlag_rechts);
-                // Trigger change event in case there are any listeners
-                $('#sondenabstand').trigger('change');
+            // IMMEDIATELY populate the alternative dropdown with the EXACT SAME options
+            // Use BOTH jQuery and native DOM to ensure it works
+            console.log('=== Populating alternative dropdown ===');
+            const altDropdown = $('#sondenabstandAlt');
+            const altDropdownDom = document.getElementById('sondenabstandAlt');
+            
+            console.log('Alternative dropdown (jQuery) found:', altDropdown.length > 0);
+            console.log('Alternative dropdown (DOM) found:', altDropdownDom !== null);
+            
+            if (altDropdown.length > 0 || altDropdownDom !== null) {
+                // Try jQuery first
+                if (altDropdown.length > 0) {
+                    altDropdown.html(options);
+                    console.log('Set via jQuery, options count:', altDropdown.find('option').length);
+                }
+                
+                // ALWAYS also use native DOM method as backup
+                if (altDropdownDom) {
+                    altDropdownDom.innerHTML = options;
+                    console.log('Set via DOM, options count:', altDropdownDom.options.length);
+                    
+                    // Verify it worked
+                    if (altDropdownDom.options.length > 0) {
+                        console.log('SUCCESS: Alternative dropdown populated via DOM');
+                        for (let i = 0; i < altDropdownDom.options.length; i++) {
+                            console.log('  Option', i + ':', altDropdownDom.options[i].value, '-', altDropdownDom.options[i].text);
+                        }
+                    } else {
+                        console.error('ERROR: DOM method also failed - dropdown still empty!');
+                    }
+                } else {
+                    console.error('ERROR: Alternative dropdown element not found in DOM!');
+                }
+                
+                // If a standard option was found and selected, update the zuschläge fields
+                if (standardOption) {
+                    $('#zuschlagLinks').val(standardOption.zuschlag_links);
+                    $('#zuschlagRechts').val(standardOption.zuschlag_rechts);
+                    // Set both dropdowns to the standard option
+                    if (altDropdown.length > 0) {
+                        altDropdown.val(standardOption.sondenabstand);
+                    }
+                    if (altDropdownDom) {
+                        altDropdownDom.value = standardOption.sondenabstand;
+                    }
+                    console.log('Set alternative dropdown to standard option:', standardOption.sondenabstand);
+                    // Trigger change event in case there are any listeners
+                    $('#sondenabstand').trigger('change');
+                } else {
+                    // If no standard option, try to preserve current selection or use first non-empty option
+                    const currentMainVal = $('#sondenabstand').val();
+                    if (currentMainVal) {
+                        if (altDropdown.length > 0) {
+                            altDropdown.val(currentMainVal);
+                        }
+                        if (altDropdownDom) {
+                            altDropdownDom.value = currentMainVal;
+                        }
+                        console.log('Set alternative dropdown to current main value:', currentMainVal);
+                    } else {
+                        // Select first non-empty option if available
+                        const firstOption = $('#sondenabstand option:not([value=""])').first();
+                        if (firstOption.length > 0) {
+                            const firstVal = firstOption.val();
+                            if (altDropdown.length > 0) {
+                                altDropdown.val(firstVal);
+                            }
+                            if (altDropdownDom) {
+                                altDropdownDom.value = firstVal;
+                            }
+                            console.log('Set alternative dropdown to first option:', firstVal);
+                        }
+                    }
+                }
+            } else {
+                console.error('Alternative dropdown #sondenabstandAlt not found in DOM!');
+                // Try to find it after a delay (in case Step 2 is being shown)
+                setTimeout(function() {
+                    const retryAlt = document.getElementById('sondenabstandAlt');
+                    if (retryAlt) {
+                        console.log('Found alternative dropdown on retry, populating...');
+                        retryAlt.innerHTML = options;
+                        if (standardOption) {
+                            retryAlt.value = standardOption.sondenabstand;
+                        }
+                    }
+                }, 500);
             }
+            
+            // Update displays
+            updateLengthDisplays();
         },
-        error: function() {
+        error: function(xhr, status, error) {
+            console.error('Error loading sondenabstand options:', error, xhr.responseText);
             BOMConfigurator.showAlert('Fehler beim Laden der Sondenabstand-Optionen.', 'danger');
+            // Try to sync from main dropdown as fallback
+            syncAlternativeSondenabstandDropdown();
         }
     });
 }
@@ -345,6 +720,96 @@ function renderGNXArticles() {
     $('#gnxArticlesList').html(html);
 }
 
+function updateLengthDisplays() {
+    updateHvbLengthDisplay();
+    updateProbeDistanceDisplay();
+}
+
+function updateHvbLengthDisplay() {
+    const sondenanzahlInput = $('#sondenanzahl').val();
+    const sondenanzahl = sondenanzahlInput ? parseFloat(sondenanzahlInput) : 0;
+    const sondenabstandVal = $('#sondenabstand').val();
+    const sondenabstand = sondenabstandVal ? parseFloat(sondenabstandVal) : 0;
+    const zuschlagLinks = parseFloat($('#zuschlagLinks').val()) || 0;
+    const zuschlagRechts = parseFloat($('#zuschlagRechts').val()) || 0;
+    const bauform = $('#bauform').val() || 'I';
+    
+    // More lenient validation - allow calculation if we have valid numbers, even if sondenanzahl is 1
+    if (!sondenanzahlInput || sondenanzahlInput === '' || isNaN(sondenanzahl) || sondenanzahl < 1) {
+        $('#hvbLengthDisplay').text('–');
+        $('#hvbLengthFormula').text('Bitte Anzahl der Sonden eingeben.');
+        return;
+    }
+    
+    if (!sondenabstandVal || sondenabstandVal === '' || isNaN(sondenabstand) || sondenabstand <= 0) {
+        $('#hvbLengthDisplay').text('–');
+        $('#hvbLengthFormula').text('Bitte den Sondenabstand wählen.');
+        return;
+    }
+    
+    let totalMm;
+    let formula;
+    
+    if (bauform === 'U') {
+        // U-Form: (sondenanzahl - 1) × 2 × sondenabstand × 2 + zuschläge
+        totalMm = (sondenanzahl - 1) * 2 * sondenabstand * 2 + zuschlagLinks + zuschlagRechts;
+        formula = `U-Form: (${sondenanzahl} - 1) × 2 × ${sondenabstand} × 2 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+    } else {
+        // I-Form: (sondenanzahl - 1) × sondenabstand × 2 + zuschläge
+        totalMm = (sondenanzahl - 1) * sondenabstand * 2 + zuschlagLinks + zuschlagRechts;
+        formula = `I-Form: (${sondenanzahl} - 1) × ${sondenabstand} × 2 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+    }
+    
+    const totalMeters = (totalMm / 1000).toFixed(2);
+    $('#hvbLengthDisplay').text(`${totalMm}mm (${totalMeters}m)`);
+    $('#hvbLengthFormula').text(formula);
+}
+
+function updateProbeDistanceDisplay() {
+    const sondenanzahlInput = $('#sondenanzahl').val();
+    const sondenanzahl = sondenanzahlInput ? parseFloat(sondenanzahlInput) : 0;
+    const sondenabstandVal = $('#sondenabstandAlt').val() || $('#sondenabstand').val();
+    const sondenabstand = sondenabstandVal ? parseFloat(sondenabstandVal) : 0;
+    const anschlussart = $('#anschlussartAlt').val() || $('#anschlussart').val();
+    
+    if (!anschlussart || anschlussart === '') {
+        $('#probeDistanceDisplay').text('–');
+        $('#probeDistanceFormula').text('Bitte Anschlussart wählen.');
+        return;
+    }
+    
+    if (!sondenanzahlInput || sondenanzahlInput === '' || isNaN(sondenanzahl) || sondenanzahl < 1) {
+        $('#probeDistanceDisplay').text('–');
+        $('#probeDistanceFormula').text('Bitte Anzahl der Sonden eingeben.');
+        return;
+    }
+    
+    if (!sondenabstandVal || sondenabstandVal === '' || isNaN(sondenabstand) || sondenabstand <= 0) {
+        $('#probeDistanceDisplay').text('–');
+        $('#probeDistanceFormula').text('Bitte den Sondenabstand wählen.');
+        return;
+    }
+    
+    let totalMm;
+    let formula;
+    
+    if (anschlussart === 'beidseitig') {
+        // Beidseitig: (je Seite Math.ceil(probes/2) - 1) × distance
+        const probesPerSide = Math.ceil(sondenanzahl / 2);
+        const effectiveProbes = Math.max(probesPerSide - 1, 0);
+        totalMm = effectiveProbes * sondenabstand;
+        formula = `${sondenanzahl} probes, both sides: (je Seite ${probesPerSide} - 1) × ${sondenabstand}mm = ${totalMm}mm`;
+    } else {
+        // Einseitig: (sondenanzahl - 1) × sondenabstand
+        totalMm = (sondenanzahl - 1) * sondenabstand;
+        formula = `${sondenanzahl} probes, one side: (${sondenanzahl}-1) × ${sondenabstand}mm = ${totalMm}mm`;
+    }
+    
+    const totalMeters = (totalMm / 1000).toFixed(2);
+    $('#probeDistanceDisplay').text(`${totalMm}mm (${totalMeters}m)`);
+    $('#probeDistanceFormula').text(formula);
+}
+
 function checkConfiguration() {
     // Collect form data
     configurationData = {
@@ -434,11 +899,13 @@ function showArticleNumberStatus(data) {
             html = `
                 <div class="alert alert-warning">
                     <h6><i class="fas fa-exclamation-triangle me-2"></i>Mutterartikel gefunden</h6>
+                    <p><strong>Mutterartikel:</strong> <code>${data.mother_article_number}</code></p>
                     <p>${data.message}</p>
                     <div class="mb-3">
                         <label class="form-label">Kindartikelnummer:</label>
                         <input type="text" class="form-control" id="childArticleNumber" 
                                value="${data.suggested_child_number}" required>
+                        <small class="form-text text-muted">Vollständige Artikelnummer: <code>${data.suggested_child_number}</code></small>
                     </div>
                 </div>
             `;
@@ -477,10 +944,31 @@ function generateBOM() {
     
     // Update configuration data with article numbers
     if ($('#childArticleNumber').length) {
-        configurationData.child_article_number = $('#childArticleNumber').val();
+        const childNumber = $('#childArticleNumber').val();
+        configurationData.child_article_number = childNumber;
+        // If child number is in format "1000089-002", also set mother_article_number
+        if (childNumber && childNumber.includes('-')) {
+            const parts = childNumber.split('-');
+            if (parts.length >= 2) {
+                configurationData.mother_article_number = parts[0];
+                configurationData.child_article_number = parts.slice(1).join('-'); // Handle cases like "1000089-002-003"
+            }
+        } else if (configurationData.mother_article_number) {
+            // If we have mother article number from check, use it
+            configurationData.child_article_number = childNumber;
+        }
     }
     if ($('#newArticleNumber').length) {
-        configurationData.full_article_number = $('#newArticleNumber').val();
+        const newNumber = $('#newArticleNumber').val();
+        configurationData.full_article_number = newNumber;
+        // If new number is in format "1000089-001", extract mother and child
+        if (newNumber && newNumber.includes('-')) {
+            const parts = newNumber.split('-');
+            if (parts.length >= 2) {
+                configurationData.mother_article_number = parts[0];
+                configurationData.child_article_number = parts.slice(1).join('-');
+            }
+        }
     }
     
     // Add GN X articles if applicable
@@ -683,9 +1171,48 @@ function testSondenAPI() {
     });
 }
 
+// Manual test function to populate alternative dropdown (for debugging)
+window.testPopulateAlternativeDropdown = function() {
+    console.log('=== Manual test: Populate Alternative Dropdown ===');
+    const mainDropdown = $('#sondenabstand');
+    const altDropdown = $('#sondenabstandAlt');
+    
+    console.log('Main dropdown found:', mainDropdown.length > 0);
+    console.log('Alt dropdown found:', altDropdown.length > 0);
+    
+    if (mainDropdown.length && altDropdown.length) {
+        const mainOptions = mainDropdown.html();
+        const mainOptionCount = mainDropdown.find('option').length;
+        
+        console.log('Main dropdown has', mainOptionCount, 'options');
+        console.log('Main dropdown HTML:', mainOptions);
+        
+        if (mainOptionCount > 1) {
+            altDropdown.html(mainOptions);
+            const altOptionCount = altDropdown.find('option').length;
+            console.log('Copied to alternative dropdown. Now has', altOptionCount, 'options');
+            
+            if (altOptionCount > 0) {
+                console.log('SUCCESS! Alternative dropdown populated.');
+                return true;
+            } else {
+                console.error('FAILED! Alternative dropdown still empty.');
+                return false;
+            }
+        } else {
+            console.error('Main dropdown has no options to copy');
+            return false;
+        }
+    } else {
+        console.error('One or both dropdowns not found');
+        return false;
+    }
+};
+
 // Export functions for global use
 window.nextStep = nextStep;
 window.previousStep = previousStep;
 window.generateBOM = generateBOM;
 window.printBOM = printBOM;
 window.testSondenAPI = testSondenAPI;
+window.syncAlternativeSondenabstandDropdown = syncAlternativeSondenabstandDropdown;
