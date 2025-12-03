@@ -2,7 +2,14 @@
 *.log
 *.pot
 *.pyc
+*.pyo
+*.pyd
 __pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -11,8 +18,10 @@ staticfiles/
 
 # Virtual Environment
 venv/
+.venv/
 env/
 ENV/
+virtualenv/
 
 # IDE
 .vscode/
