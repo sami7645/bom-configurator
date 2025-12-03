@@ -95,19 +95,48 @@ def build_stumpfschweiss_endkappen(config) -> List[Dict]:
     return items
 
 
-def build_entlueftung_components(config) -> List[Dict]:
-    """Entlüftung parts – most always included, some with HVB dependencies."""
+def build_entlueftung_components(config, context=None) -> List[Dict]:
+    """Entlüftung parts – only specific components are included.
+    According to requirements:
+    - Only include: 2001029, 2000718, 2000852, 2001167 (always included, even if in Kugelhahn/DFM)
+    - Article 2001167 quantity from Entlüftung (4) is additive to quantities from Kugelhahn/DFM
+    - Exclude all others that appear in Kugelhahn or DFM to avoid duplicates."""
     items: List[Dict] = []
     hvb_size = str(config.hvb_size)
-
+    probe_size = str(config.sonden_durchmesser)
+    
+    # Articles that should always be included from Entlüftung
+    # According to requirements:
+    # - 2001029: Absperrventil Kunststoff - Kugelhahn DA 32 mm x 1" AG – Einlegeteil
+    # - 2000718: Verschluss - Endkappe 1 IG"
+    # - 2000852: Absperrventil Kunststoff - Kugelhahn DA 32 mm ohne Einlegeteil (also appears in Kugelhahn, but included separately)
+    # - 2001167: Absperrventil - KST - ZUB - KH32 - Überwurfmutter - SKS (quantity 4 from Entlüftung is additive to Kugelhahn/DFM quantities)
+    # All other articles from Entlüftung are excluded
+    always_include_articles = {
+        "2001029",  # Absperrventil Kunststoff - Kugelhahn DA 32 mm x 1" AG – Einlegeteil
+        "2000718",  # Verschluss - Endkappe 1 IG"
+        "2000852",  # Absperrventil Kunststoff - Kugelhahn DA 32 mm ohne Einlegeteil
+        "2001167",  # Absperrventil - KST - ZUB - KH32 - Überwurfmutter - SKS (additive quantity from Entlüftung)
+    }
+    
     for part in Entlueftung.objects.all():
         compat_value = getattr(part, "et_hvb", "")
         if not _compatibility_match(compat_value, hvb_size, config.sonden_durchmesser):
             continue
+        
+        artikelnummer = format_artikelnummer(part.artikelnummer)
+        
+        # Only include articles that are in the always_include list
+        # This ensures only the specified components (2001029, 2000718, 2000852, 2001167) are included
+        # Article 2001167's quantity from Entlüftung is additive to its quantities from Kugelhahn/DFM
+        # All other articles from Entlüftung are excluded, even if they don't appear in Kugelhahn/DFM
+        if artikelnummer not in always_include_articles:
+            continue
+            
         qty = part.menge_statisch or Decimal("1")
         items.append(
             {
-                "artikelnummer": format_artikelnummer(part.artikelnummer),
+                "artikelnummer": artikelnummer,
                 "artikelbezeichnung": part.artikelbezeichnung,
                 "menge": qty,
                 "source_table": "Entlüftung",
@@ -127,6 +156,31 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
     if not config.dfm_type or not config.dfm_type.startswith('K-DFM'):
         return items
 
+    # Determine kugelhahn_type for checking formulas
+    kugelhahn_type = config.kugelhahn_type
+    if not kugelhahn_type and config.dfm_type and config.dfm_type.startswith('K-DFM'):
+        kugelhahn_type = "DN 25 / DA 32"  # Default for plastic DFM
+
+    # Build a map of article numbers to their formulas from Kugelhahn
+    kugelhahn_formula_map = {}
+    if kugelhahn_type:
+        hvb_size = str(config.hvb_size)
+        probe_size = str(config.sonden_durchmesser)
+        kugelhahn_entries = Kugelhahn.objects.filter(kugelhahn=kugelhahn_type)
+        for kh_entry in kugelhahn_entries:
+            if not kh_entry.artikelnummer:
+                continue
+            # Apply same compatibility checks
+            if kh_entry.et_hvb and not check_compatibility(kh_entry.et_hvb, hvb_size, probe_size, 'hvb'):
+                continue
+            if kh_entry.et_sonden and not check_compatibility(kh_entry.et_sonden, hvb_size, probe_size, 'sonden'):
+                continue
+            if kh_entry.kh_hvb and not check_compatibility(kh_entry.kh_hvb, hvb_size, probe_size, 'hvb'):
+                continue
+            # Store formula if it exists
+            if kh_entry.menge_formel:
+                kugelhahn_formula_map[format_artikelnummer(kh_entry.artikelnummer)] = kh_entry.menge_formel
+
     dfm_entries = DFM.objects.filter(durchflussarmatur=config.dfm_type)
     for entry in dfm_entries:
         if not entry.artikelnummer:
@@ -138,9 +192,18 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
         if entry.dfm_hvb and not check_compatibility(entry.dfm_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
             continue
 
+        # Calculate quantity: use formula if available, otherwise static value
         quantity = entry.menge_statisch
         if entry.menge_formel:
             quantity = calculate_formula(entry.menge_formel, context)
+        elif not entry.menge_formel and entry.menge_statisch:
+            # If DFM has only static value but no formula, check if same article
+            # exists in Kugelhahn with a formula - if so, use that formula instead
+            artikelnummer = format_artikelnummer(entry.artikelnummer)
+            if artikelnummer in kugelhahn_formula_map:
+                formula = kugelhahn_formula_map[artikelnummer]
+                quantity = calculate_formula(formula, context)
+        
         if quantity is None:
             continue
 

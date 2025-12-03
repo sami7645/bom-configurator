@@ -617,7 +617,7 @@ def generate_bom(request):
         additional_components.extend(bom_rules.build_plastic_dfm_components(config, calc_context))
         additional_components.extend(bom_rules.build_sondenverschlusskappen(config, calc_context))
         additional_components.extend(bom_rules.build_stumpfschweiss_endkappen(config))
-        additional_components.extend(bom_rules.build_entlueftung_components(config))
+        additional_components.extend(bom_rules.build_entlueftung_components(config, calc_context))
         additional_components.extend(bom_rules.build_manifold_components(config))
 
         component_map = {}
