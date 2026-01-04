@@ -119,6 +119,8 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
+# Set STATIC_ROOT for production (also used as fallback)
+STATIC_ROOT = str(BASE_DIR / "staticfiles")
 
 # CSV Files Configuration
 CSV_FILES_DIR = BASE_DIR / "excel_sheets_extracted"
