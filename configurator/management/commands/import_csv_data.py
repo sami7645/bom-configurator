@@ -7,7 +7,7 @@ from configurator.models import (
     Schacht, HVB, Sondengroesse, Sondenabstand, Kugelhahn, DFM,
     Entlueftung, Sondenverschlusskappe, StumpfschweissEndkappe,
     WPVerschlusskappe, WPA, Verrohrung, Schachtgrenze,
-    Schachtkompatibilitaet, CSVDataSource, GNXChamberArticle
+    Schachtkompatibilitaet, CSVDataSource, GNXChamberArticle, HVBStuetze
 )
 
 
@@ -51,6 +51,9 @@ class Command(BaseCommand):
             'Verrohrung.csv': self.import_verrohrung,
             'Schachtgrenze.csv': self.import_schachtgrenze,
             'Schachtkompatibilitaet.csv': self.import_schachtkompatibilitaet,
+            'GNXChamberArticle.csv': self.import_gnx_chamber_articles_csv,
+            'GN X-Series - Extra Articles.csv': self.import_gnx_extra_articles_csv,
+            'AdditionalProbeCombinations.csv': self.import_additional_probe_combinations_csv,
         }
 
         for filename, import_func in csv_files.items():
@@ -62,11 +65,6 @@ class Command(BaseCommand):
                     self.style.WARNING(f'File not found: {filename}')
                 )
         
-        # Import GN X chamber articles (hardcoded based on client requirements)
-        self.import_gnx_chamber_articles()
-        
-        # Add missing probe combinations for better dropdown coverage
-        self.add_missing_probe_combinations()
         
         self.stdout.write(self.style.SUCCESS('All CSV files imported successfully!'))
 
@@ -449,17 +447,19 @@ class Command(BaseCommand):
         reader = self.read_csv_file(file_path)
         for row in reader:
             row = self.clean_row(row)
-            if any(row.values()):
-                name = row.get(list(row.keys())[0], '')
-                if name and name.strip():
-                    Schachtgrenze.objects.create(
-                        name=name,
-                        artikelnummer=row.get('Artikelnummer', ''),
-                        artikelbezeichnung=row.get('Artikelbezeichnung', ''),
-                        menge_statisch=self.safe_decimal(row.get('Menge Statisch')),
-                        menge_formel=row.get('Menge Formel', '')
-                    )
-                    count += 1
+            schachttyp = row.get('Schachttyp', '').strip()
+            if schachttyp:
+                max_sondenanzahl = self.safe_int(row.get('Max Sondenanzahl'))
+                erlaubte_hvb = row.get('Erlaubte HVB', '').strip()
+                hinweis = row.get('Hinweis', '').strip()
+                
+                Schachtgrenze.objects.create(
+                    schachttyp=schachttyp,
+                    max_sondenanzahl=max_sondenanzahl,
+                    erlaubte_hvb=erlaubte_hvb,
+                    hinweis=hinweis
+                )
+                count += 1
         return count
 
     def import_schachtkompatibilitaet(self, file_path):
@@ -483,106 +483,145 @@ class Command(BaseCommand):
                     count += 1
         return count
 
-    def import_gnx_chamber_articles(self):
-        """Import GN X chamber articles based on client requirements"""
+    def import_gnx_chamber_articles_csv(self, file_path):
+        """Import GN X chamber articles from CSV file"""
         GNXChamberArticle.objects.all().delete()
         
-        # Based on client requirements for GN X chambers and HVB sizes
-        gnx_articles = [
-            # For HVB 63-125mm
-            {'hvb_size_min': 63, 'hvb_size_max': 125, 'artikelnummer': '2001837', 'artikelbezeichnung': 'GN X - Zusatzartikel 63-125mm'},
-            {'hvb_size_min': 63, 'hvb_size_max': 125, 'artikelnummer': '2001838', 'artikelbezeichnung': 'GN X - Zusatzartikel 63-125mm (2)'},
-            
-            # For HVB 140-180mm  
-            {'hvb_size_min': 140, 'hvb_size_max': 180, 'artikelnummer': '2001839', 'artikelbezeichnung': 'GN X - Zusatzartikel 140-180mm'},
-            {'hvb_size_min': 140, 'hvb_size_max': 180, 'artikelnummer': '2001840', 'artikelbezeichnung': 'GN X - Zusatzartikel 140-180mm (2)'},
-            
-            # For HVB 200-250mm
-            {'hvb_size_min': 200, 'hvb_size_max': 250, 'artikelnummer': '2001841', 'artikelbezeichnung': 'GN X - Zusatzartikel 200-250mm'},
-            {'hvb_size_min': 200, 'hvb_size_max': 250, 'artikelnummer': '2001842', 'artikelbezeichnung': 'GN X - Zusatzartikel 200-250mm (2)'},
-        ]
-        
         count = 0
-        for article_data in gnx_articles:
-            GNXChamberArticle.objects.create(**article_data)
-            count += 1
-            
-        self.stdout.write(
-            self.style.SUCCESS(f'Successfully imported {count} GN X chamber articles')
-        )
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    GNXChamberArticle.objects.create(
+                        hvb_size_min=int(row['hvb_size_min']),
+                        hvb_size_max=int(row['hvb_size_max']),
+                        artikelnummer=row['artikelnummer'].strip(),
+                        artikelbezeichnung=row['artikelbezeichnung'].strip()
+                    )
+                    count += 1
+                except Exception as e:
+                    self.stdout.write(
+                        self.style.WARNING(f'Error importing GN X chamber article {row.get("artikelnummer", "unknown")}: {e}')
+                    )
         
         return count
 
-    def add_missing_probe_combinations(self):
-        """Add missing probe combinations for better dropdown coverage"""
+    def import_additional_probe_combinations_csv(self, file_path):
+        """Import additional probe combinations from CSV file (only adds if combination doesn't exist)"""
         from decimal import Decimal
         
-        self.stdout.write('Adding missing probe combinations...')
-        
-        # Additional probe combinations to ensure dropdowns work
-        additional_probes = [
-            # GN X1 combinations
-            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN X1', 'hvb_size': '63', 'sondenanzahl_min': 5, 'sondenanzahl_max': 20, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
-            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN X1', 'hvb_size': '75', 'sondenanzahl_min': 5, 'sondenanzahl_max': 25, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
-            {'durchmesser_sonde': '50', 'artikelnummer': '2000490', 'artikelbezeichnung': 'Rohr - PE 100-RC - 50', 'schachttyp': 'GN X1', 'hvb_size': '90', 'sondenanzahl_min': 5, 'sondenanzahl_max': 30, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
-            
-            # GN X3 combinations
-            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN X3', 'hvb_size': '110', 'sondenanzahl_min': 10, 'sondenanzahl_max': 50, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
-            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN X3', 'hvb_size': '125', 'sondenanzahl_min': 10, 'sondenanzahl_max': 60, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
-            {'durchmesser_sonde': '50', 'artikelnummer': '2000490', 'artikelbezeichnung': 'Rohr - PE 100-RC - 50', 'schachttyp': 'GN X3', 'hvb_size': '140', 'sondenanzahl_min': 10, 'sondenanzahl_max': 70, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
-            
-            # GN X4 combinations
-            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN X4', 'hvb_size': '160', 'sondenanzahl_min': 15, 'sondenanzahl_max': 80, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
-            {'durchmesser_sonde': '50', 'artikelnummer': '2000490', 'artikelbezeichnung': 'Rohr - PE 100-RC - 50', 'schachttyp': 'GN X4', 'hvb_size': '180', 'sondenanzahl_min': 15, 'sondenanzahl_max': 100, 'vorlauf_laenge': Decimal('0.280'), 'ruecklauf_laenge': Decimal('0.365')},
-            
-            # GN 2 combinations
-            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN 2', 'hvb_size': '63', 'sondenanzahl_min': 5, 'sondenanzahl_max': 15, 'vorlauf_laenge': Decimal('0.265'), 'ruecklauf_laenge': Decimal('0.365')},
-            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN 2', 'hvb_size': '75', 'sondenanzahl_min': 5, 'sondenanzahl_max': 20, 'vorlauf_laenge': Decimal('0.265'), 'ruecklauf_laenge': Decimal('0.365')},
-            
-            # GN R Medium combinations
-            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN R Medium', 'hvb_size': '63', 'sondenanzahl_min': 3, 'sondenanzahl_max': 8, 'vorlauf_laenge': Decimal('0.200'), 'ruecklauf_laenge': Decimal('0.300')},
-            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN R Medium', 'hvb_size': '75', 'sondenanzahl_min': 3, 'sondenanzahl_max': 10, 'vorlauf_laenge': Decimal('0.200'), 'ruecklauf_laenge': Decimal('0.300')},
-            
-            # GN R Mini combinations
-            {'durchmesser_sonde': '32', 'artikelnummer': '2000488', 'artikelbezeichnung': 'Rohr - PE 100-RC - 32', 'schachttyp': 'GN R Mini', 'hvb_size': '63', 'sondenanzahl_min': 2, 'sondenanzahl_max': 5, 'vorlauf_laenge': Decimal('0.150'), 'ruecklauf_laenge': Decimal('0.250')},
-            
-            # GN 1 combinations
-            {'durchmesser_sonde': '40', 'artikelnummer': '2000489', 'artikelbezeichnung': 'Rohr - PE 100-RC - 40', 'schachttyp': 'GN 1', 'hvb_size': '75', 'sondenanzahl_min': 8, 'sondenanzahl_max': 15, 'vorlauf_laenge': Decimal('0.265'), 'ruecklauf_laenge': Decimal('0.365')},
-        ]
-        
         added_count = 0
-        for probe_data in additional_probes:
-            try:
-                # Check if combination already exists (using string fields, not foreign keys)
-                existing = Sondengroesse.objects.filter(
-                    durchmesser_sonde=probe_data['durchmesser_sonde'],
-                    schachttyp=probe_data['schachttyp'],
-                    hvb=probe_data['hvb_size']
-                ).first()
-                
-                if not existing:
-                    Sondengroesse.objects.create(
-                        durchmesser_sonde=probe_data['durchmesser_sonde'],
-                        artikelnummer=probe_data['artikelnummer'],
-                        artikelbezeichnung=probe_data['artikelbezeichnung'],
-                        schachttyp=probe_data['schachttyp'],  # String field, not foreign key
-                        hvb=probe_data['hvb_size'],  # String field, not foreign key
-                        bauform='',  # Default empty
-                        sondenanzahl_min=probe_data['sondenanzahl_min'],
-                        sondenanzahl_max=probe_data['sondenanzahl_max'],
-                        vorlauf_laenge=probe_data['vorlauf_laenge'],
-                        ruecklauf_laenge=probe_data['ruecklauf_laenge'],
-                        vorlauf_formel='',  # Default empty
-                        ruecklauf_formel='',  # Default empty
-                        hinweis=''  # Default empty
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    # Check if combination already exists
+                    existing = Sondengroesse.objects.filter(
+                        durchmesser_sonde=row['durchmesser_sonde'].strip(),
+                        schachttyp=row['schachttyp'].strip(),
+                        hvb=row['hvb_size'].strip()
+                    ).first()
+                    
+                    if not existing:
+                        Sondengroesse.objects.create(
+                            durchmesser_sonde=row['durchmesser_sonde'].strip(),
+                            artikelnummer=row['artikelnummer'].strip(),
+                            artikelbezeichnung=row['artikelbezeichnung'].strip(),
+                            schachttyp=row['schachttyp'].strip(),
+                            hvb=row['hvb_size'].strip(),
+                            bauform='',
+                            sondenanzahl_min=int(row['sondenanzahl_min']),
+                            sondenanzahl_max=int(row['sondenanzahl_max']),
+                            vorlauf_laenge=Decimal(row['vorlauf_laenge']),
+                            ruecklauf_laenge=Decimal(row['ruecklauf_laenge']),
+                            vorlauf_formel='',
+                            ruecklauf_formel='',
+                            hinweis=''
+                        )
+                        added_count += 1
+                except Exception as e:
+                    self.stdout.write(
+                        self.style.WARNING(f'Error importing additional probe combination: {e}')
                     )
-                    added_count += 1
-                        
-            except Exception as e:
-                self.stdout.write(f'Error adding probe combination: {e}')
-        
-        self.stdout.write(
-            self.style.SUCCESS(f'Added {added_count} missing probe combinations')
-        )
         
         return added_count
+    
+    def import_gnx_extra_articles_csv(self, file_path):
+        """Import GN X-Series Extra Articles (HVB Stütze) from CSV file"""
+        import re
+        HVBStuetze.objects.all().delete()
+        
+        count = 0
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
+            lines = f.readlines()
+            # Skip first line if it's not a proper header
+            start_line = 0
+            if lines and 'Xentral' in lines[0]:
+                start_line = 1
+            
+            # Find the header line (should contain "Nummer" and "Artikel")
+            header_line = None
+            for i in range(start_line, len(lines)):
+                if 'Nummer' in lines[i] and 'Artikel' in lines[i]:
+                    header_line = i
+                    break
+            
+            if header_line is None:
+                self.stdout.write(
+                    self.style.ERROR('Could not find header line in GN X-Series Extra Articles CSV')
+                )
+                return 0
+            
+            # Read from the line after the header
+            reader = csv.DictReader(lines[header_line:])
+            for row in reader:
+                try:
+                    artikelnummer = row.get('Nummer', '').strip()
+                    artikel = row.get('Artikel', '').strip()
+                    
+                    if not artikelnummer or not artikel:
+                        continue
+                    
+                    # Skip header rows or invalid entries
+                    if not artikelnummer.isdigit():
+                        continue
+                    
+                    # Parse the Artikel column to extract diameter and position
+                    # Pattern: "GN X - ZUB - Verteiler - Stütze - Oben/Unten - [diameter]"
+                    # Handle both "Oben" and "Unten" (some files use "Unter" but this CSV uses "Unten")
+                    match = re.search(r'Stütze\s*-\s*(Oben|Unten|Unter)\s*-\s*(\d+)', artikel, re.IGNORECASE)
+                    if not match:
+                        self.stdout.write(
+                            self.style.WARNING(f'Could not parse Artikel for {artikelnummer}: {artikel}')
+                        )
+                        continue
+                    
+                    position = match.group(1).strip()
+                    diameter = match.group(2).strip()
+                    
+                    # Normalize position: "Unten" -> "Unter" for consistency
+                    if position.lower() == 'unten':
+                        position = 'Unter'
+                    elif position.lower() == 'oben':
+                        position = 'Oben'
+                    
+                    # Create or update the entry
+                    HVBStuetze.objects.update_or_create(
+                        hvb_durchmesser=diameter,
+                        position=position,
+                        defaults={
+                            'artikelnummer': artikelnummer,
+                            'artikelbezeichnung': artikel
+                        }
+                    )
+                    count += 1
+                except Exception as e:
+                    self.stdout.write(
+                        self.style.WARNING(f'Error importing GN X Extra Article {row.get("Nummer", "unknown")}: {e}')
+                    )
+        
+        self.stdout.write(
+            self.style.SUCCESS(f'Successfully imported {count} GN X-Series Extra Articles (HVB Stütze)')
+        )
+        
+        return count

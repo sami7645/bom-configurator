@@ -17,10 +17,30 @@ $(document).ready(function() {
         updateSondenOptions();
     });
     $('#anschlussart').on('change', updateSondenabstandOptions);
-    $('#sondenDurchmesser').on('change', updateSondenanzahlRange);
-    $('#schachttyp').on('change', checkGNXChamber);
+    // Note: updateSondenanzahlRange is now based on Schachtgrenze (schachttyp), not sondenDurchmesser
+    // But we keep the handler for backward compatibility
+    $('#sondenDurchmesser').on('change', function() {
+        // Range is set by schachttyp, but we can validate the current value
+        validateSondenanzahl();
+    });
+    $('#schachttyp').on('change', function() {
+        updateHvbOptions();
+        checkGNXChamber();
+        updateSondenanzahlFromSchachtgrenze();
+    });
+    
+    // Initialize sondenanzahl range if schachttyp is already selected (e.g., on page load)
+    if ($('#schachttyp').val()) {
+        updateSondenanzahlFromSchachtgrenze();
+    }
     $('#hvbSize').on('change', loadGNXArticles);
-    $('#dfmCategory').on('change', updateDFMOptions);
+    $('#dfmCategory').on('change', handleDFMCategoryChange);
+    $('#dfmType').on('change', function() {
+        // When dfmType changes, just ensure D-Kugelhahn section is hidden if needed
+        if ($('#dfmType').val() !== 'Kugelhahn-Typ') {
+            $('#dfmKugelhahnTypeSection').hide();
+        }
+    });
     
     // Length calculation display updates
     const lengthInputs = '#sondenanzahl, #sondenabstand, #zuschlagLinks, #zuschlagRechts, #bauform, #anschlussart';
@@ -81,6 +101,11 @@ $(document).ready(function() {
     
     // Initial update
     updateLengthDisplays();
+    
+    // Update HVB options if Schachttyp is already selected
+    if ($('#schachttyp').val()) {
+        updateHvbOptions();
+    }
     
     // Watch for when Step 2 becomes visible and ensure alternative dropdown is populated
     const step2Observer = new MutationObserver(function(mutations) {
@@ -154,11 +179,156 @@ function validateStep(step) {
     return isValid;
 }
 
+// Field label mapping for summary display
+const fieldLabels = {
+    'configuration_name': 'Konfigurationsname',
+    'schachttyp': 'Schachttyp',
+    'hvb_size': 'HVB-Größe',
+    'anschlussart': 'Anschlussart',
+    'sonden_durchmesser': 'Sonden-Durchmesser',
+    'sondenanzahl': 'Anzahl Sonden',
+    'sondenabstand': 'Sondenabstand',
+    'bauform': 'Bauform',
+    'zuschlag_links': 'Zuschlag Links',
+    'zuschlag_rechts': 'Zuschlag Rechts',
+    'kugelhahn_type': 'Kugelhahn-Typ',
+    'dfm_category': 'DFM-Kategorie',
+    'dfm_type': 'DFM-Typ',
+    'dfm_kugelhahn_type': 'D-Kugelhahn-Typ'
+};
+
+// Step field mapping - which fields belong to which step
+const stepFields = {
+    1: ['configuration_name', 'schachttyp', 'hvb_size'],
+    2: ['anschlussart', 'sonden_durchmesser', 'sondenanzahl', 'sondenabstand', 'bauform', 'zuschlag_links', 'zuschlag_rechts'],
+    3: ['kugelhahn_type', 'dfm_category', 'dfm_type', 'dfm_kugelhahn_type']
+};
+
+function formatFieldValue(fieldName, value) {
+    if (!value || value === '') return 'Nicht ausgewählt';
+    
+    // Format specific fields
+    if (fieldName === 'hvb_size') return `${value}mm`;
+    if (fieldName === 'sonden_durchmesser') return `${value}mm`;
+    if (fieldName === 'sondenabstand') return `${value}mm`;
+    if (fieldName === 'bauform') return value === 'U' ? 'U-Form' : 'I-Form';
+    if (fieldName === 'anschlussart') return value === 'einseitig' ? 'Einseitig' : 'Beidseitig';
+    if (fieldName === 'dfm_category') return value === 'plastic' ? 'Kunststoff' : value === 'brass' ? 'Messing' : value;
+    
+    return value;
+}
+
+// Field ID mapping - maps field names to actual DOM IDs
+const fieldIdMap = {
+    'configuration_name': 'configName',
+    'schachttyp': 'schachttyp',
+    'hvb_size': 'hvbSize',
+    'anschlussart': 'anschlussart',
+    'sonden_durchmesser': 'sondenDurchmesser',
+    'sondenanzahl': 'sondenanzahl',
+    'sondenabstand': 'sondenabstand',
+    'bauform': 'bauform',
+    'zuschlag_links': 'zuschlagLinks',
+    'zuschlag_rechts': 'zuschlagRechts',
+    'kugelhahn_type': 'kugelhahnType',
+    'dfm_category': 'dfmCategory',
+    'dfm_type': 'dfmType',
+    'dfm_kugelhahn_type': 'dfmKugelhahnType'
+};
+
+function getStepSummary(stepNumber) {
+    const summary = [];
+    
+    if (stepFields[stepNumber]) {
+        stepFields[stepNumber].forEach(fieldName => {
+            const fieldId = fieldIdMap[fieldName] || fieldName.replace(/_/g, '');
+            let value = '';
+            
+            // Prioritize configurationData since form fields might not be accessible in step 5
+            if (configurationData[fieldName]) {
+                value = configurationData[fieldName];
+            } else {
+                // Fallback to form field if available
+                const $field = $(`#${fieldId}`);
+                if ($field.length) {
+                    value = $field.val() || '';
+                }
+            }
+            
+            if (value) {
+                const label = fieldLabels[fieldName] || fieldName;
+                const formattedValue = formatFieldValue(fieldName, value);
+                summary.push([label, formattedValue]);
+            }
+        });
+    }
+    
+    return summary;
+}
+
+function updateStepSummary(step) {
+    // Only show summary for steps 2 and 3 (not step 4)
+    if (step < 2 || step > 3) return;
+    
+    if (step === 2) {
+        // Step 2: Show only Step 1 summary
+        const step1Summary = getStepSummary(1);
+        const $summaryContainer = $(`#config-step-${step} .step-1-summary`);
+        
+        if ($summaryContainer.length && step1Summary.length > 0) {
+            let html = '<div class="table-responsive"><table class="table table-sm table-borderless" style="width: auto;"><tbody>';
+            step1Summary.forEach(function(row) {
+                html += `<tr><td><strong>${row[0]}:</strong></td><td>${row[1]}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+            $summaryContainer.html(html);
+            $summaryContainer.closest('.summary-section').removeClass('d-none');
+        } else if ($summaryContainer.length && step1Summary.length === 0) {
+            $summaryContainer.closest('.summary-section').addClass('d-none');
+        }
+    } else if (step === 3) {
+        // Step 3: Show Step 1 in left box, Step 2 in right box
+        const step1Summary = getStepSummary(1);
+        const step2Summary = getStepSummary(2);
+        
+        // Update Step 1 summary (left box)
+        const $step1Container = $(`#config-step-${step} .step-1-summary`);
+        if ($step1Container.length && step1Summary.length > 0) {
+            let html = '<div class="table-responsive"><table class="table table-sm table-borderless" style="width: auto;"><tbody>';
+            step1Summary.forEach(function(row) {
+                html += `<tr><td><strong>${row[0]}:</strong></td><td>${row[1]}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+            $step1Container.html(html);
+            $step1Container.closest('.summary-section').removeClass('d-none');
+        } else if ($step1Container.length && step1Summary.length === 0) {
+            $step1Container.closest('.summary-section').addClass('d-none');
+        }
+        
+        // Update Step 2 summary (right box)
+        const $step2Container = $(`#config-step-${step} .step-2-summary`);
+        if ($step2Container.length && step2Summary.length > 0) {
+            let html = '<div class="table-responsive"><table class="table table-sm table-borderless" style="width: auto;"><tbody>';
+            step2Summary.forEach(function(row) {
+                html += `<tr><td><strong>${row[0]}:</strong></td><td>${row[1]}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+            $step2Container.html(html);
+            $step2Container.closest('.summary-section').removeClass('d-none');
+        } else if ($step2Container.length && step2Summary.length === 0) {
+            $step2Container.closest('.summary-section').addClass('d-none');
+        }
+    }
+}
+
 function nextStep(step) {
     if (!validateStep(currentStep)) {
         BOMConfigurator.showAlert('Bitte füllen Sie alle Pflichtfelder aus.', 'warning');
         return;
     }
+    
+    // Save current step data before moving
+    saveStepData(currentStep);
     
     // Hide current step
     $(`#config-step-${currentStep}`).addClass('d-none');
@@ -171,6 +341,9 @@ function nextStep(step) {
     $(`#config-step-${step}`).removeClass('d-none').addClass('fade-in');
     
     currentStep = step;
+    
+    // Update summary for current step
+    updateStepSummary(step);
     
     // Ensure sonden options are loaded when entering step 2
     if (step === 2) {
@@ -227,8 +400,23 @@ function nextStep(step) {
         }, 300);
     }
     
+    // Special handling for step 3 - ensure DFM dropdown visibility is correct
+    if (step === 3) {
+        setTimeout(function() {
+            // Check if dfmCategory is set to "kugelhahn" and show dropdown if needed
+            const category = $('#dfmCategory').val();
+            if (category === 'kugelhahn') {
+                $('#dfmKugelhahnTypeSection').show();
+            }
+        }, 100);
+    }
+    
     // Special handling for step 4 (configuration check)
     if (step === 4) {
+        // Save all data before checking
+        saveStepData(1);
+        saveStepData(2);
+        saveStepData(3);
         checkConfiguration();
     }
     
@@ -236,7 +424,23 @@ function nextStep(step) {
     $('html, body').animate({ scrollTop: 0 }, 500);
 }
 
+function saveStepData(step) {
+    // Save data from current step to configurationData
+    if (stepFields[step]) {
+        stepFields[step].forEach(fieldName => {
+            const fieldId = fieldName.replace(/_/g, '');
+            const $field = $(`#${fieldId}`);
+            if ($field.length) {
+                configurationData[fieldName] = $field.val() || '';
+            }
+        });
+    }
+}
+
 function previousStep(step) {
+    // Save current step data before moving
+    saveStepData(currentStep);
+    
     // Hide current step
     $(`#config-step-${currentStep}`).addClass('d-none');
     
@@ -248,6 +452,9 @@ function previousStep(step) {
     $(`#config-step-${step}`).removeClass('d-none').addClass('fade-in');
     
     currentStep = step;
+    
+    // Update summary for current step
+    updateStepSummary(step);
     
     // Ensure sonden options are loaded when going back to step 2
     if (step === 2) {
@@ -302,6 +509,110 @@ function previousStep(step) {
     
     // Scroll to top
     $('html, body').animate({ scrollTop: 0 }, 500);
+}
+
+// Store original HVB options for restoration
+let originalHvbOptions = null;
+
+function updateHvbOptions() {
+    const schachttyp = $('#schachttyp').val();
+    const $hvbSelect = $('#hvbSize');
+    
+    // Store original options if not already stored
+    if (!originalHvbOptions) {
+        originalHvbOptions = $hvbSelect.html();
+    }
+    
+    if (!schachttyp) {
+        // If no Schachttyp selected, restore all options
+        $hvbSelect.html(originalHvbOptions);
+        return;
+    }
+    
+    const currentValue = $hvbSelect.val();
+    
+    $.ajax({
+        url: '/api/allowed-hvb-sizes/',
+        method: 'POST',
+        data: JSON.stringify({
+            schachttyp: schachttyp
+        }),
+        contentType: 'application/json',
+        success: function(data) {
+            console.log('Allowed HVB sizes response:', data);
+            
+            if (data.error) {
+                console.error('Error getting allowed HVB sizes:', data.error);
+                // On error, restore all options
+                $hvbSelect.html(originalHvbOptions);
+                return;
+            }
+            
+            const allowedSizes = data.allowed_sizes || [];
+            const allAllowed = data.all_allowed || false;
+            
+            console.log('Allowed sizes:', allowedSizes, 'All allowed:', allAllowed);
+            
+            if (allAllowed || allowedSizes.length === 0) {
+                // No restrictions, restore all options
+                console.log('No restrictions - showing all HVB options');
+                $hvbSelect.html(originalHvbOptions);
+            } else {
+                console.log('Filtering HVB options to:', allowedSizes);
+                
+                // Rebuild options with only allowed sizes
+                let newOptions = '<option value="">Bitte wählen...</option>';
+                
+                // Parse original options and filter
+                const $originalOptions = $(originalHvbOptions);
+                $originalOptions.each(function() {
+                    const $option = $(this);
+                    const optionValue = $option.val();
+                    
+                    if (!optionValue) {
+                        // Keep the "Bitte wählen..." option
+                        return;
+                    }
+                    
+                    // Extract size number from option value
+                    let sizeNumber = optionValue.toString().trim();
+                    if (sizeNumber.toLowerCase().endsWith('mm')) {
+                        sizeNumber = sizeNumber.slice(0, -2).trim();
+                    }
+                    
+                    // Also check the option text
+                    const optionText = $option.text().trim();
+                    let textSizeNumber = optionText;
+                    if (textSizeNumber.toLowerCase().endsWith('mm')) {
+                        textSizeNumber = textSizeNumber.slice(0, -2).trim();
+                    }
+                    
+                    // Use the size number from value or text
+                    const finalSize = sizeNumber || textSizeNumber;
+                    
+                    // Check if this size is in allowed list
+                    if (allowedSizes.includes(finalSize)) {
+                        newOptions += `<option value="${optionValue}">${optionText}</option>`;
+                    }
+                });
+                
+                $hvbSelect.html(newOptions);
+                
+                // If current selection was allowed, restore it
+                if (currentValue) {
+                    const currentSize = currentValue.toString().trim().replace(/mm$/i, '');
+                    if (allowedSizes.includes(currentSize)) {
+                        $hvbSelect.val(currentValue);
+                    }
+                }
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error fetching allowed HVB sizes:', error);
+            // On error, restore all options
+            $hvbSelect.html(originalHvbOptions);
+        }
+    });
 }
 
 function updateSondenOptions() {
@@ -612,9 +923,21 @@ function updateSondenabstandOptions() {
     });
 }
 
-function updateDFMOptions() {
+function handleDFMCategoryChange() {
     const category = $('#dfmCategory').val();
     
+    // Hide D-Kugelhahn section initially
+    $('#dfmKugelhahnTypeSection').hide();
+    $('#dfmKugelhahnType').val('');
+    
+    // If "Kugelhahn-Typ" is selected from category dropdown, show the D-Kugelhahn dropdown
+    if (category === 'kugelhahn') {
+        $('#dfmKugelhahnTypeSection').show();
+        $('#dfmType').html('<option value="">Nicht verfügbar</option>').prop('disabled', true).val('');
+        return;
+    }
+    
+    // For other categories, load DFM options normally
     if (!category) {
         $('#dfmType').html('<option value="">Erst Kategorie wählen...</option>').prop('disabled', true).val('');
         return;
@@ -638,6 +961,12 @@ function updateDFMOptions() {
             });
             
             $('#dfmType').html(options);
+            
+            // Restore previous selection if it exists
+            const previousValue = $('#dfmType').data('previous-value');
+            if (previousValue && $('#dfmType option[value="' + previousValue + '"]').length > 0) {
+                $('#dfmType').val(previousValue);
+            }
         },
         error: function() {
             $('#dfmType').html('<option value="">Fehler beim Laden</option>');
@@ -648,17 +977,96 @@ function updateDFMOptions() {
     });
 }
 
-function updateSondenanzahlRange() {
-    const selectedOption = $('#sondenDurchmesser option:selected');
-    const min = selectedOption.data('min');
-    const max = selectedOption.data('max');
+function updateDFMOptions() {
+    // This function is kept for backward compatibility but now redirects to handleDFMCategoryChange
+    handleDFMCategoryChange();
+}
+
+function updateSondenanzahlFromSchachtgrenze() {
+    const schachttyp = $('#schachttyp').val();
     
-    if (min && max) {
-        $('#sondenanzahl').attr('min', min).attr('max', max);
-        $('#sondenanzahlRange').text(`Erlaubter Bereich: ${min} - ${max} Sonden`);
-    } else {
+    if (!schachttyp) {
+        $('#sondenanzahl').attr('min', 2).removeAttr('max');
         $('#sondenanzahlRange').text('');
+        return;
     }
+    
+    // Get CSRF token
+    const csrftoken = $('[name=csrfmiddlewaretoken]').val();
+    
+    // Fetch max sondenanzahl from Schachtgrenze
+    $.ajax({
+        url: '/api/schachtgrenze-info/',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': csrftoken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        data: JSON.stringify({ schachttyp: schachttyp }),
+        success: function(response) {
+            console.log('Schachtgrenze response:', response);
+            
+            if (response.error) {
+                console.warn('Schachtgrenze API returned error:', response.error);
+                // Still set min to 2 even if there's an error
+                $('#sondenanzahl').attr('min', 2).removeAttr('max');
+                $('#sondenanzahlRange').text(`Erlaubter Bereich: 2 - ∞ Sonden (${response.error})`);
+                return;
+            }
+            
+            const min = 2; // Always 2 as per requirement
+            const max = response.max_sondenanzahl;
+            
+            $('#sondenanzahl').attr('min', min);
+            
+            if (max && max > 0) {
+                $('#sondenanzahl').attr('max', max);
+                $('#sondenanzahlRange').text(`Erlaubter Bereich: ${min} - ${max} Sonden`);
+            } else {
+                $('#sondenanzahl').removeAttr('max');
+                $('#sondenanzahlRange').text(`Erlaubter Bereich: ${min} - ∞ Sonden`);
+            }
+            
+            // If current value exceeds max, reset it
+            const currentValue = parseInt($('#sondenanzahl').val()) || 0;
+            if (max && currentValue > max) {
+                $('#sondenanzahl').val(max);
+            }
+            if (currentValue < min) {
+                $('#sondenanzahl').val(min);
+            }
+            
+            // Remove any error styling
+            $('#sondenanzahl').removeClass('is-invalid');
+        },
+        error: function(xhr, status, error) {
+            console.error('Error fetching Schachtgrenze info:', error, xhr.responseText);
+            // Fallback: set min to 2, no max
+            $('#sondenanzahl').attr('min', 2).removeAttr('max');
+            $('#sondenanzahlRange').text('Fehler beim Laden der Grenzwerte');
+            $('#sondenanzahl').addClass('is-invalid');
+        }
+    });
+}
+
+function validateSondenanzahl() {
+    // Validate current sondenanzahl value against min/max
+    const currentValue = parseInt($('#sondenanzahl').val()) || 0;
+    const min = parseInt($('#sondenanzahl').attr('min')) || 2;
+    const max = parseInt($('#sondenanzahl').attr('max')) || null;
+    
+    if (currentValue < min) {
+        $('#sondenanzahl').val(min);
+    } else if (max && currentValue > max) {
+        $('#sondenanzahl').val(max);
+    }
+}
+
+function updateSondenanzahlRange() {
+    // This function is kept for backward compatibility but now uses Schachtgrenze
+    // The range is set when schachttyp changes, not when sondenDurchmesser changes
+    updateSondenanzahlFromSchachtgrenze();
 }
 
 function checkGNXChamber() {
@@ -751,13 +1159,13 @@ function updateHvbLengthDisplay() {
     let formula;
     
     if (bauform === 'U') {
-        // U-Form: (sondenanzahl - 1) × 2 × sondenabstand × 2 + zuschläge
-        totalMm = (sondenanzahl - 1) * 2 * sondenabstand * 2 + zuschlagLinks + zuschlagRechts;
-        formula = `U-Form: (${sondenanzahl} - 1) × 2 × ${sondenabstand} × 2 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+        // U-Form: (sondenanzahl - 1) × sondenabstand + zuschläge
+        totalMm = (sondenanzahl - 1) * sondenabstand + zuschlagLinks + zuschlagRechts;
+        formula = `U-Form: (${sondenanzahl} - 1) × ${sondenabstand} + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
     } else {
-        // I-Form: (sondenanzahl - 1) × sondenabstand × 2 + zuschläge
-        totalMm = (sondenanzahl - 1) * sondenabstand * 2 + zuschlagLinks + zuschlagRechts;
-        formula = `I-Form: (${sondenanzahl} - 1) × ${sondenabstand} × 2 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+        // I-Form: (sondenanzahl - 1) × sondenabstand + zuschläge
+        totalMm = (sondenanzahl - 1) * sondenabstand + zuschlagLinks + zuschlagRechts;
+        formula = `I-Form: (${sondenanzahl} - 1) × ${sondenabstand} + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
     }
     
     const totalMeters = (totalMm / 1000).toFixed(2);
@@ -794,15 +1202,15 @@ function updateProbeDistanceDisplay() {
     let formula;
     
     if (anschlussart === 'beidseitig') {
-        // Beidseitig: (je Seite Math.ceil(probes/2) - 1) × distance
-        const probesPerSide = Math.ceil(sondenanzahl / 2);
-        const effectiveProbes = Math.max(probesPerSide - 1, 0);
-        totalMm = effectiveProbes * sondenabstand;
-        formula = `${sondenanzahl} probes, both sides: (je Seite ${probesPerSide} - 1) × ${sondenabstand}mm = ${totalMm}mm`;
+        // Beidseitig: (je Seite Math.ceil(sondenanzahl/2) - 1) × sondenabstand
+        const sondenProSeite = Math.ceil(sondenanzahl / 2);
+        const effektiveSonden = Math.max(sondenProSeite - 1, 0);
+        totalMm = effektiveSonden * sondenabstand;
+        formula = `${sondenanzahl} Sonden, beidseitig: (je Seite ${sondenProSeite} - 1) × ${sondenabstand}mm = ${totalMm}mm`;
     } else {
         // Einseitig: (sondenanzahl - 1) × sondenabstand
         totalMm = (sondenanzahl - 1) * sondenabstand;
-        formula = `${sondenanzahl} probes, one side: (${sondenanzahl}-1) × ${sondenabstand}mm = ${totalMm}mm`;
+        formula = `${sondenanzahl} Sonden, einseitig: (${sondenanzahl} - 1) × ${sondenabstand}mm = ${totalMm}mm`;
     }
     
     const totalMeters = (totalMm / 1000).toFixed(2);
@@ -823,6 +1231,7 @@ function checkConfiguration() {
         kugelhahn_type: $('#kugelhahnType').val(),
         dfm_type: $('#dfmType').val(),
         dfm_category: $('#dfmCategory').val(),
+        dfm_kugelhahn_type: $('#dfmKugelhahnType').val(),
         bauform: $('#bauform').val(),
         zuschlag_links: $('#zuschlagLinks').val(),
         zuschlag_rechts: $('#zuschlagRechts').val()
@@ -863,7 +1272,8 @@ function showConfigurationSummary() {
         ['Anschlussart', configurationData.anschlussart],
         ['Kugelhahn-Typ', configurationData.kugelhahn_type || 'Nicht ausgewählt'],
         ['DFM-Kategorie', configurationData.dfm_category || 'Nicht ausgewählt'],
-        ['DFM-Typ', configurationData.dfm_type || 'Nicht ausgewählt']
+        ['DFM-Typ', configurationData.dfm_type || 'Nicht ausgewählt'],
+        ['D-Kugelhahn-Typ', configurationData.dfm_kugelhahn_type || 'Nicht ausgewählt']
     ];
     
     let html = '';
@@ -936,11 +1346,26 @@ function generateBOM() {
     const generateBtn = $('#generateBomBtn');
     BOMConfigurator.showLoading(generateBtn);
     
+    // Save all step data before generating BOM
+    saveStepData(1);
+    saveStepData(2);
+    saveStepData(3);
+    saveStepData(4);
+    
     // Refresh dynamic fields before sending
     configurationData.dfm_category = $('#dfmCategory').val();
     configurationData.dfm_type = $('#dfmType').val();
+    configurationData.dfm_kugelhahn_type = $('#dfmKugelhahnType').val();
     configurationData.kugelhahn_type = $('#kugelhahnType').val();
     configurationData.bauform = $('#bauform').val();
+    
+    // Debug logging
+    console.log('DEBUG BOM Generation - Sending data:', {
+        kugelhahn_type: configurationData.kugelhahn_type,
+        dfm_category: configurationData.dfm_category,
+        dfm_type: configurationData.dfm_type,
+        dfm_kugelhahn_type: configurationData.dfm_kugelhahn_type
+    });
     
     // Update configuration data with article numbers
     if ($('#childArticleNumber').length) {
@@ -1023,11 +1448,114 @@ function generateBOM() {
 }
 
 function showBOMResult(data) {
+    // Ensure all data is saved
+    saveStepData(1);
+    saveStepData(2);
+    saveStepData(3);
+    
+    // Get summaries for all steps
+    const step1Summary = getStepSummary(1);
+    const step2Summary = getStepSummary(2);
+    const step3Summary = getStepSummary(3);
+    
+    // Debug logging
+    console.log('Configuration Data:', configurationData);
+    console.log('Step 1 Summary:', step1Summary);
+    console.log('Step 2 Summary:', step2Summary);
+    console.log('Step 3 Summary:', step3Summary);
+    
     let html = `
         <div class="alert alert-success">
             <h6><i class="fas fa-check-circle me-2"></i>BOM erfolgreich generiert</h6>
             <p><strong>Konfiguration:</strong> ${configurationData.configuration_name}</p>
             <p><strong>Artikelnummer:</strong> <code>${data.article_number}</code></p>
+        </div>
+        
+        <!-- Configuration Summary -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Konfigurationsübersicht</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="summary-section">
+                            <h6 class="text-muted mb-2"><i class="fas fa-info-circle me-2"></i>Schritt 1: Schachttyp & HVB</h6>
+                            <div class="previous-steps-summary">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tbody>
+    `;
+    
+    // Add Step 1 summary
+    step1Summary.forEach(function(row) {
+        html += `
+                                        <tr>
+                                            <td>${row[0]}:</td>
+                                            <td><strong>${row[1]}</strong></td>
+                                        </tr>
+        `;
+    });
+    
+    html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="summary-section">
+                            <h6 class="text-muted mb-2"><i class="fas fa-info-circle me-2"></i>Schritt 2: Sonden-Konfiguration</h6>
+                            <div class="previous-steps-summary">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tbody>
+    `;
+    
+    // Add Step 2 summary
+    step2Summary.forEach(function(row) {
+        html += `
+                                        <tr>
+                                            <td>${row[0]}:</td>
+                                            <td><strong>${row[1]}</strong></td>
+                                        </tr>
+        `;
+    });
+    
+    html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                ${step3Summary.length > 0 ? `
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="summary-section">
+                            <h6 class="text-muted mb-2"><i class="fas fa-info-circle me-2"></i>Schritt 3: Zusätzliche Komponenten</h6>
+                            <div class="previous-steps-summary">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tbody>
+                ` : ''}
+    
+    ${step3Summary.map(function(row) {
+        return `
+                                        <tr>
+                                            <td>${row[0]}:</td>
+                                            <td><strong>${row[1]}</strong></td>
+                                        </tr>
+        `;
+    }).join('')}
+    
+    ${step3Summary.length > 0 ? `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
         </div>
         
         <div class="bom-table">

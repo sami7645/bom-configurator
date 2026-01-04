@@ -95,8 +95,8 @@ class VerrohrungAdmin(admin.ModelAdmin):
 
 @admin.register(Schachtgrenze)
 class SchachtgrenzeAdmin(admin.ModelAdmin):
-    list_display = ['name', 'artikelnummer', 'artikelbezeichnung', 'menge_statisch']
-    search_fields = ['name', 'artikelnummer', 'artikelbezeichnung']
+    list_display = ['schachttyp', 'max_sondenanzahl', 'erlaubte_hvb', 'hinweis']
+    search_fields = ['schachttyp', 'erlaubte_hvb', 'hinweis']
 
 
 @admin.register(Schachtkompatibilitaet)

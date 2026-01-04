@@ -2,6 +2,94 @@ from decimal import Decimal
 import re
 
 
+def parse_allowed_hvb_sizes(erlaubte_hvb):
+    """
+    Parse allowed HVB sizes from erlaubte_hvb field.
+    Extracts only DA values (DA 63, DA 75, etc.) and ignores other text.
+    
+    Examples:
+        "DA 63" -> ["63"]
+        "DA 63|DA 75|DA 90" -> ["63", "75", "90"]
+        "Max 10 Sonden; HVB ≤ DA 110" -> ["110"]
+        "DA 63|DA 75|DA 90|DA 110|DA 125" -> ["63", "75", "90", "110", "125"]
+    
+    Args:
+        erlaubte_hvb: String containing allowed HVB values
+        
+    Returns:
+        List of HVB sizes as strings (without "DA" prefix)
+    """
+    if not erlaubte_hvb or not erlaubte_hvb.strip():
+        return []
+    
+    # Find all patterns like "DA 63", "DA 75", etc.
+    # Pattern: DA followed by space and 2-3 digits
+    pattern = r'DA\s+(\d{2,3})'
+    matches = re.findall(pattern, str(erlaubte_hvb))
+    
+    # Remove duplicates and sort numerically
+    unique_sizes = list(set(matches))
+    # Sort as integers for proper numerical order
+    unique_sizes.sort(key=lambda x: int(x))
+    
+    return unique_sizes
+
+
+def extract_numeric_range_for_sorting(text):
+    """
+    Extract numeric range from text for sorting purposes.
+    Looks for patterns like "2-12", "35-70", "5-42", etc.
+    Returns a tuple (first_number, second_number) for sorting.
+    If no range found, returns (999999, 999999) to sort to end.
+    
+    Examples:
+        "K-DFM 2-12" -> (2, 12)
+        "K-DFM 35-70" -> (35, 70)
+        "HC VTR 20" -> (20, 20)
+        "No numbers" -> (999999, 999999)
+    """
+    if not text:
+        return (999999, 999999)
+    
+    # Look for pattern: number-number (e.g., "2-12", "35-70")
+    range_match = re.search(r'(\d+)\s*-\s*(\d+)', str(text))
+    if range_match:
+        first = int(range_match.group(1))
+        second = int(range_match.group(2))
+        return (first, second)
+    
+    # Look for single number (e.g., "HC VTR 20")
+    single_match = re.search(r'(\d+)', str(text))
+    if single_match:
+        num = int(single_match.group(1))
+        return (num, num)
+    
+    # No numbers found, sort to end
+    return (999999, 999999)
+
+
+def sort_by_numeric_range(items):
+    """
+    Sort a list of strings by extracting numeric ranges from them.
+    Items with numeric ranges are sorted by the second number (after dash), then first.
+    Items without numbers are sorted alphabetically at the end.
+    
+    Args:
+        items: List of strings to sort
+        
+    Returns:
+        Sorted list
+    """
+    def sort_key(item):
+        numeric_range = extract_numeric_range_for_sorting(item)
+        # Return tuple: (second_num, first_num, original_text)
+        # Sort by second number (after dash) first, then first number
+        # This ensures items with same second number are sorted by first number
+        return (numeric_range[1], numeric_range[0], str(item).lower())
+    
+    return sorted(items, key=sort_key)
+
+
 def format_artikelnummer(artikelnummer):
     """Format article number by removing .0 suffix if present"""
     if not artikelnummer:

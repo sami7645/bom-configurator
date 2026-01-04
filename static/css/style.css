@@ -388,6 +388,104 @@ body {
     to { transform: translateX(0); }
 }
 
+/* Configuration Summary Table - Compact Layout */
+#configurationSummary .table-responsive {
+    overflow-x: visible;
+}
+
+#configurationSummary .table {
+    margin-bottom: 0;
+    width: auto !important;
+    max-width: 100%;
+}
+
+#configSummaryTable {
+    width: auto !important;
+}
+
+#configSummaryTable td:first-child {
+    width: auto !important;
+    min-width: 150px;
+    max-width: 200px;
+    padding-right: 5px !important;
+    padding-left: 0 !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+#configSummaryTable td:last-child {
+    width: auto !important;
+    padding-left: 5px !important;
+    padding-right: 1rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    vertical-align: top;
+}
+
+#configSummaryTable tr {
+    border-bottom: 1px solid var(--light-bg);
+}
+
+#configSummaryTable tr:last-child {
+    border-bottom: none;
+}
+
+/* Previous Steps Summary - Same compact styling */
+.previous-steps-summary .table-responsive {
+    overflow-x: visible;
+}
+
+.previous-steps-summary .table {
+    margin-bottom: 0;
+    width: auto !important;
+    max-width: 100%;
+}
+
+.previous-steps-summary td:first-child {
+    width: auto !important;
+    min-width: 150px;
+    max-width: 200px;
+    padding-right: 5px !important;
+    padding-left: 0 !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.previous-steps-summary td:last-child {
+    width: auto !important;
+    padding-left: 5px !important;
+    padding-right: 1rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    vertical-align: top;
+}
+
+.previous-steps-summary tr {
+    border-bottom: 1px solid var(--light-bg);
+}
+
+.previous-steps-summary tr:last-child {
+    border-bottom: none;
+}
+
+.summary-section {
+    background-color: rgba(52, 152, 219, 0.05);
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-color);
+    height: 100%;
+}
+
+.summary-section h6 {
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    color: var(--secondary-color);
+}
+
 /* Print Styles */
 @media print {
     .navbar, .btn, .alert {

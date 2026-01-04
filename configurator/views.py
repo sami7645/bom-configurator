@@ -13,12 +13,12 @@ def calculate_hvb_length(config):
 
     # Use U-form for chambers with multiple probes, I-form for manifolds
     if config.schachttyp == 'Verteiler' or config.bauform == 'I':
-        # I-form formula: (sondenanzahl - 1) * sondenabstand * 2 + zuschläge
-        base = (sondenanzahl - 1) * distance * 2
+        # I-form formula: (sondenanzahl - 1) * sondenabstand + zuschläge
+        base = (sondenanzahl - 1) * distance
     else:
-        # U-form formula for chambers: (sondenanzahl - 1) * sondenabstand * 2 + zuschläge
-        # Note: The spec shows both formulas are actually the same for the base calculation
-        base = (sondenanzahl - 1) * distance * 2
+        # U-form formula for chambers: (sondenanzahl - 1) * sondenabstand + zuschläge
+        # Note: Both formulas are the same for the base calculation
+        base = (sondenanzahl - 1) * distance
 
     total_mm = base + zuschlag_links + zuschlag_rechts
     if total_mm <= 0:
@@ -35,9 +35,11 @@ from django.views.decorators.http import require_http_methods
 from django.db.models import Q
 from .models import (
     Schacht, HVB, Sondengroesse, Sondenabstand, Kugelhahn, DFM,
-    BOMConfiguration, BOMItem, GNXChamberArticle, GNXChamberConfiguration
+    BOMConfiguration, BOMItem, GNXChamberArticle, GNXChamberConfiguration,
+    Schachtgrenze
 )
 from .services import bom_rules
+from .utils import parse_allowed_hvb_sizes
 from .utils import format_artikelnummer, calculate_formula, check_compatibility
 
 
@@ -224,8 +226,70 @@ def get_sondenabstand_options(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def get_allowed_hvb_sizes(request):
+    """Get allowed HVB sizes for a selected Schachttyp based on Schachtgrenze"""
+    try:
+        data = json.loads(request.body)
+        schachttyp = data.get('schachttyp', '').strip()
+        
+        if not schachttyp:
+            return JsonResponse({'allowed_sizes': [], 'error': 'Schachttyp is required'})
+        
+        # Get Schachtgrenze for this Schachttyp
+        try:
+            schachtgrenze = Schachtgrenze.objects.get(schachttyp=schachttyp)
+            erlaubte_hvb = schachtgrenze.erlaubte_hvb or ''
+        except Schachtgrenze.DoesNotExist:
+            # If no restriction found, allow all HVB sizes
+            return JsonResponse({'allowed_sizes': [], 'all_allowed': True})
+        
+        # Parse allowed HVB sizes from erlaubte_hvb field
+        allowed_sizes = parse_allowed_hvb_sizes(erlaubte_hvb)
+        
+        return JsonResponse({
+            'allowed_sizes': allowed_sizes,
+            'all_allowed': len(allowed_sizes) == 0  # If empty, all are allowed
+        })
+    except Exception as e:
+        return JsonResponse({'allowed_sizes': [], 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_schachtgrenze_info(request):
+    """Get max sondenanzahl from Schachtgrenze based on Schachttyp"""
+    try:
+        data = json.loads(request.body)
+        schachttyp = data.get('schachttyp', '').strip()
+        
+        if not schachttyp:
+            return JsonResponse({'max_sondenanzahl': None, 'error': 'Schachttyp is required'})
+        
+        # Get Schachtgrenze for this Schachttyp
+        try:
+            schachtgrenze = Schachtgrenze.objects.get(schachttyp=schachttyp)
+            max_sondenanzahl = schachtgrenze.max_sondenanzahl
+            return JsonResponse({
+                'max_sondenanzahl': max_sondenanzahl,
+                'min_sondenanzahl': 2  # Always 2 as per requirement
+            })
+        except Schachtgrenze.DoesNotExist:
+            # If no restriction found, return None (no limit)
+            return JsonResponse({
+                'max_sondenanzahl': None,
+                'min_sondenanzahl': 2,
+                'error': 'No Schachtgrenze found for this Schachttyp'
+            })
+    except Exception as e:
+        return JsonResponse({'max_sondenanzahl': None, 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def get_dfm_options(request):
     """Get DFM options based on category"""
+    from configurator.utils import sort_by_numeric_range
+    
     data = json.loads(request.body)
     category = data.get('category', '')
     
@@ -240,6 +304,9 @@ def get_dfm_options(request):
     
     dfm_options = []
     
+    # "Kugelhahn-Typ" is always available as an option regardless of category
+    # Note: This will be added in the frontend, but we keep the backend clean
+    
     for dfm in all_dfm_types:
         name = dfm['durchflussarmatur']
         
@@ -253,6 +320,9 @@ def get_dfm_options(request):
                 name.startswith('IMI STAD') or 
                 name.startswith('IMI TA')):
                 dfm_options.append(name)
+    
+    # Sort by numeric range (e.g., "2-12", "5-42", "8-28", "35-70")
+    dfm_options = sort_by_numeric_range(dfm_options)
     
     return JsonResponse({
         'dfm_options': dfm_options
@@ -275,12 +345,14 @@ def check_existing_configuration(request):
     kugelhahn_type = data.get('kugelhahn_type', '') or ''
     dfm_type = data.get('dfm_type', '') or ''
     dfm_category = data.get('dfm_category', '') or ''
+    dfm_kugelhahn_type = data.get('dfm_kugelhahn_type', '') or ''
     bauform = data.get('bauform', 'I') or 'I'
     
     # Normalize empty strings to None for optional fields
     kugelhahn_type = kugelhahn_type if kugelhahn_type else None
     dfm_type = dfm_type if dfm_type else None
     dfm_category = dfm_category if dfm_category else None
+    dfm_kugelhahn_type = dfm_kugelhahn_type if dfm_kugelhahn_type else None
     
     # STEP 1: Check if exact configuration exists (all parameters match)
     # This includes optional fields - if they're None, match None; if they have values, match values
@@ -309,6 +381,11 @@ def check_existing_configuration(request):
         query = query.filter(dfm_category__isnull=True)
     else:
         query = query.filter(dfm_category=dfm_category)
+    
+    if dfm_kugelhahn_type is None:
+        query = query.filter(dfm_kugelhahn_type__isnull=True)
+    else:
+        query = query.filter(dfm_kugelhahn_type=dfm_kugelhahn_type)
     
     existing_config = query.first()
     
@@ -346,6 +423,7 @@ def check_existing_configuration(request):
             kugelhahn_type=kugelhahn_type,
             dfm_type=dfm_type,
             dfm_category=dfm_category,
+            dfm_kugelhahn_type=dfm_kugelhahn_type,
             mother_article_number=mother_config.mother_article_number
         ).exclude(child_article_number__isnull=True).exclude(child_article_number='').first()
         
@@ -484,6 +562,7 @@ def generate_bom(request):
             kugelhahn_type=data.get('kugelhahn_type', '') or None,
             dfm_type=data.get('dfm_type', '') or None,
             dfm_category=data.get('dfm_category', '') or None,
+            dfm_kugelhahn_type=data.get('dfm_kugelhahn_type', '') or None,
             bauform=data.get('bauform', 'I') or 'I',
             mother_article_number=mother_article_number or None,
             child_article_number=child_article_number or None,
@@ -613,7 +692,9 @@ def generate_bom(request):
         
         # Use rule-based builders for all configurations
         additional_components = []
+        additional_components.extend(bom_rules.build_hvb_stuetze_components(config))
         additional_components.extend(bom_rules.build_kugelhahn_components(config, calc_context))
+        additional_components.extend(bom_rules.build_dfm_kugelhahn_components(config, calc_context))
         additional_components.extend(bom_rules.build_plastic_dfm_components(config, calc_context))
         additional_components.extend(bom_rules.build_sondenverschlusskappen(config, calc_context))
         additional_components.extend(bom_rules.build_stumpfschweiss_endkappen(config))
@@ -622,7 +703,11 @@ def generate_bom(request):
 
         component_map = {}
         for component in additional_components:
-            key = component['artikelnummer']
+            # Use both artikelnummer and source_table as key to keep different sources separate
+            # This ensures "Kugelhahn" and "D-Kugelhahn" items are distinguished even if same article
+            source = component.get('source_table', component.get('source', 'Unknown'))
+            key = f"{component['artikelnummer']}::{source}"
+            
             if key in component_map:
                 component_map[key]['menge'] += component['menge']
             else:
@@ -630,7 +715,7 @@ def generate_bom(request):
                     'artikelnummer': component['artikelnummer'],
                     'artikelbezeichnung': component['artikelbezeichnung'],
                     'menge': component['menge'],
-                    'source_table': component.get('source_table', component.get('source', 'Unknown'))
+                    'source_table': source
                 }
 
         for component in component_map.values():
@@ -648,7 +733,7 @@ def generate_bom(request):
         for item in bom_items:
             # Convert Decimal to float for JSON serialization to avoid any scaling issues
             menge_value = float(item.menge)
-            print(f"DEBUG JSON: Article {item.artikelnummer}, Menge in DB: {item.menge}, Float: {menge_value}, String: {str(menge_value)}")
+            print(f"DEBUG JSON: Article {item.artikelnummer}, Menge in DB: {item.menge}, Float: {menge_value}, Source: {item.source_table}")
             bom_data.append({
                 'artikelnummer': item.artikelnummer,
                 'artikelbezeichnung': item.artikelbezeichnung,

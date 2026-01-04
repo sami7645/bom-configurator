@@ -80,14 +80,6 @@
                                         {% endfor %}
                                     </select>
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="anschlussart" class="form-label">Anschlussart</label>
-                                    <select class="form-select" id="anschlussart" name="anschlussart" required>
-                                        <option value="">Bitte wählen...</option>
-                                        <option value="einseitig">Einseitig</option>
-                                        <option value="beidseitig">Beidseitig</option>
-                                    </select>
-                                </div>
                             </div>
                             
                             <div class="text-end">
@@ -110,7 +102,25 @@
                             <h5><i class="fas fa-ruler me-2"></i>Schritt 2: Sonden-Konfiguration</h5>
                         </div>
                         <div class="card-body">
+                            <!-- Previous Steps Summary -->
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="summary-section">
+                                        <h6 class="text-muted mb-2"><i class="fas fa-info-circle me-2"></i>Schritt 1:</h6>
+                                        <div class="step-1-summary"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr class="mb-4">
                             <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="anschlussart" class="form-label">Anschlussart</label>
+                                    <select class="form-select" id="anschlussart" name="anschlussart" required>
+                                        <option value="">Bitte wählen...</option>
+                                        <option value="einseitig">Einseitig</option>
+                                        <option value="beidseitig">Beidseitig</option>
+                                    </select>
+                                </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="sondenDurchmesser" class="form-label">Sonden-Durchmesser</label>
                                     <select class="form-select" id="sondenDurchmesser" name="sonden_durchmesser" required>
@@ -118,6 +128,9 @@
                                     </select>
                                     {% comment %} <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="testSondenAPI()">🔧 Test API</button> {% endcomment %}
                                 </div>
+                            </div>
+                            
+                            <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label for="sondenanzahl" class="form-label">Anzahl Sonden</label>
                                     <input type="number" class="form-control" id="sondenanzahl" name="sondenanzahl" 
@@ -157,49 +170,49 @@
                                 </div>
                             </div>
                             
-                            <!-- HVB Length Calculation Result (Blue Section) -->
+                            <!-- HVB Längenberechnung (Blaue Sektion) -->
                             <div class="row mt-4">
                                 <div class="col-12 mb-3">
                                     <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white;">
                                         <div class="card-body text-center py-4">
-                                            <h2 class="mb-2" id="hvbLengthDisplay" style="font-size: 2.5rem; font-weight: bold;">–</h2>
-                                            <p class="mb-1" style="font-size: 0.9rem; opacity: 0.9;">HVB Length Calculation Result</p>
-                                            <p class="mb-0" style="font-size: 0.85rem; opacity: 0.8;" id="hvbLengthFormula">Bitte alle Werte eingeben...</p>
+                                            <h2 class="mb-2" id="hvbLengthDisplay" style="font-size: 2.5rem; font-weight: bold; color: white;">–</h2>
+                                            <p class="mb-1" style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.95);">HVB Längenberechnung</p>
+                                            <p class="mb-0" style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.9);" id="hvbLengthFormula">Bitte alle Werte eingeben...</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Sondenabstände (Probe Distances) / Alternative Calculation (Green Section) -->
+                            <!-- Sondenabstände / Alternative Berechnung (Grüne Sektion) -->
                             <div class="row mt-3">
                                 <div class="col-12">
                                     <div class="card border-light shadow-sm">
-                                        <div class="card-header bg-light">
-                                            <h6 class="mb-0"><i class="fas fa-calculator me-2"></i>Sondenabstände (Probe Distances)</h6>
-                                            <small class="text-muted">Configure the distance between probes. This provides an alternative HVB length calculation.</small>
+                                        <div class="card-header">
+                                            <h6 class="mb-0" style="color: white;"><i class="fas fa-calculator me-2"></i>Sondenabstände</h6>
+                                            <small style="color: rgba(255, 255, 255, 0.9) !important;">Konfigurieren Sie den Abstand zwischen den Sonden. Dies bietet eine alternative HVB-Längenberechnung.</small>
                                         </div>
                                         <div class="card-body">
                                             <div class="row mb-3">
                                                 <div class="col-md-6">
-                                                    <label for="sondenabstandAlt" class="form-label">Sondenabstand (Probe Distance)</label>
+                                                    <label for="sondenabstandAlt" class="form-label">Sondenabstand</label>
                                                     <select class="form-select" id="sondenabstandAlt" name="sondenabstand_alt">
                                                         <option value="">Bitte wählen...</option>
                                                     </select>
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label for="anschlussartAlt" class="form-label">Anschlussart (Connection)</label>
+                                                    <label for="anschlussartAlt" class="form-label">Anschlussart</label>
                                                     <select class="form-select" id="anschlussartAlt" name="anschlussart_alt">
                                                         <option value="">Bitte wählen...</option>
-                                                        <option value="einseitig">Einseitig (one side)</option>
-                                                        <option value="beidseitig">Beidseitig (both sides)</option>
+                                                        <option value="einseitig">Einseitig</option>
+                                                        <option value="beidseitig">Beidseitig</option>
                                                     </select>
                                                 </div>
                                             </div>
                                             <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white;">
                                                 <div class="card-body text-center py-4">
-                                                    <h2 class="mb-2" id="probeDistanceDisplay" style="font-size: 2.5rem; font-weight: bold;">–</h2>
-                                                    <p class="mb-1" style="font-size: 0.9rem; opacity: 0.9;">Probe Distance Calculation</p>
-                                                    <p class="mb-0" style="font-size: 0.85rem; opacity: 0.8;" id="probeDistanceFormula">Bitte Anschlussart, Sondenanzahl und Abstand wählen...</p>
+                                                    <h2 class="mb-2" id="probeDistanceDisplay" style="font-size: 2.5rem; font-weight: bold; color: white;">–</h2>
+                                                    <p class="mb-1" style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.95);">Sondenabstand-Berechnung</p>
+                                                    <p class="mb-0" style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.9);" id="probeDistanceFormula">Bitte Anschlussart, Sondenanzahl und Abstand wählen...</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -212,7 +225,7 @@
                                 <div class="col-12">
                                     <div class="alert alert-info d-flex align-items-center mb-0">
                                         <i class="fas fa-info-circle me-2"></i>
-                                        <small>U-Form configuration: For uneven probe distribution, the system uses the same formula as if probes were evenly distributed on both sides for ERP system</small>
+                                        <small>U-Form Konfiguration: Bei ungleichmäßiger Sondenverteilung verwendet das System die gleiche Formel, als wären die Sonden gleichmäßig auf beiden Seiten verteilt, für das ERP-System.</small>
                                     </div>
                                 </div>
                             </div>
@@ -240,29 +253,61 @@
                             <h5><i class="fas fa-plus-circle me-2"></i>Schritt 3: Zusätzliche Komponenten</h5>
                         </div>
                         <div class="card-body">
+                            <!-- Previous Steps Summary -->
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="summary-section">
+                                        <h6 class="text-muted mb-2"><i class="fas fa-info-circle me-2"></i>Schritt 1:</h6>
+                                        <div class="step-1-summary"></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="summary-section">
+                                        <h6 class="text-muted mb-2"><i class="fas fa-info-circle me-2"></i>Schritt 2:</h6>
+                                        <div class="step-2-summary"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr class="mb-4">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="kugelhahnType" class="form-label">Kugelhahn-Typ (optional)</label>
-                                    <select class="form-select" id="kugelhahnType" name="kugelhahn_type">
-                                        <option value="">Keinen auswählen</option>
-                                        {% for kugelhahn in kugelhahn_types %}
-                                            <option value="{{ kugelhahn.kugelhahn }}">{{ kugelhahn.kugelhahn }}</option>
-                                        {% endfor %}
-                                    </select>
+                                    <h6 class="mb-3" style="color: #dc3545; font-weight: 600;">Vorlauf</h6>
+                                    <div class="mb-3">
+                                        <label for="kugelhahnType" class="form-label">Kugelhahn-Typ (optional)</label>
+                                        <select class="form-select" id="kugelhahnType" name="kugelhahn_type">
+                                            <option value="">Keinen auswählen</option>
+                                            {% for kugelhahn in kugelhahn_types %}
+                                                <option value="{{ kugelhahn.kugelhahn }}">{{ kugelhahn.kugelhahn }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="dfmType" class="form-label">Durchflussmesser-Typ</label>
+                                        <select class="form-select" id="dfmType" name="dfm_type" disabled>
+                                            <option value="">Erst Kategorie wählen...</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="dfmCategory" class="form-label">Durchflussmesser-Kategorie (optional)</label>
-                                    <select class="form-select" id="dfmCategory" name="dfm_category">
-                                        <option value="">Keinen auswählen</option>
-                                        <option value="plastic">Kunststoff-Durchflussmesser</option>
-                                        <option value="brass">Messing-Durchflussmesser</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="dfmType" class="form-label">Durchflussmesser-Typ</label>
-                                    <select class="form-select" id="dfmType" name="dfm_type" disabled>
-                                        <option value="">Erst Kategorie wählen...</option>
-                                    </select>
+                                    <h6 class="mb-3" style="color: #6f42c1; font-weight: 600;">Rücklauf</h6>
+                                    <div class="mb-3">
+                                        <label for="dfmCategory" class="form-label">Durchflussmesser-Kategorie (optional)</label>
+                                        <select class="form-select" id="dfmCategory" name="dfm_category">
+                                            <option value="">Keinen auswählen</option>
+                                            <option value="plastic">Kunststoff-Durchflussmesser</option>
+                                            <option value="brass">Messing-Durchflussmesser</option>
+                                            <option value="kugelhahn">Kugelhahn-Typ</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3" id="dfmKugelhahnTypeSection" style="display: none;">
+                                        <label for="dfmKugelhahnType" class="form-label">D-Kugelhahn-Typ</label>
+                                        <select class="form-select" id="dfmKugelhahnType" name="dfm_kugelhahn_type">
+                                            <option value="">Bitte wählen...</option>
+                                            {% for kugelhahn in kugelhahn_types %}
+                                                <option value="{{ kugelhahn.kugelhahn }}">{{ kugelhahn.kugelhahn }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -310,7 +355,7 @@
                             <div id="configurationSummary" class="d-none">
                                 <h6>Konfigurationsübersicht</h6>
                                 <div class="table-responsive">
-                                    <table class="table table-sm">
+                                    <table class="table table-sm table-borderless" style="width: auto;">
                                         <tbody id="configSummaryTable">
                                         </tbody>
                                     </table>
@@ -362,5 +407,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/configurator.js' %}"></script>
+{% load static %}
+<script src="{% static 'js/configurator.js' %}?v=2"></script>
 {% endblock %}

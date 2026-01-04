@@ -215,14 +215,13 @@ class Verrohrung(models.Model):
 
 class Schachtgrenze(models.Model):
     """Shaft boundaries from Schachtgrenze.csv"""
-    name = models.CharField(max_length=100)
-    artikelnummer = models.CharField(max_length=50)
-    artikelbezeichnung = models.CharField(max_length=200)
-    menge_statisch = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
-    menge_formel = models.CharField(max_length=200, blank=True, null=True)
+    schachttyp = models.CharField(max_length=100, unique=True)  # e.g., "GN R Mini"
+    max_sondenanzahl = models.IntegerField(blank=True, null=True)
+    erlaubte_hvb = models.CharField(max_length=500, blank=True, null=True)  # e.g., "DA 63" or "DA 63|DA 75|DA 90"
+    hinweis = models.CharField(max_length=500, blank=True, null=True)
     
     def __str__(self):
-        return f"{self.name} - {self.artikelnummer}"
+        return f"{self.schachttyp} - {self.erlaubte_hvb or 'No HVB restrictions'}"
     
     class Meta:
         verbose_name_plural = "Schachtgrenzen"
@@ -259,6 +258,7 @@ class BOMConfiguration(models.Model):
     kugelhahn_type = models.CharField(max_length=100, blank=True, null=True)
     dfm_type = models.CharField(max_length=100, blank=True, null=True)
     dfm_category = models.CharField(max_length=50, blank=True, null=True)
+    dfm_kugelhahn_type = models.CharField(max_length=100, blank=True, null=True)  # Kugelhahn-Typ selected from DFM dropdown
     bauform = models.CharField(max_length=1, choices=(('I', 'I-Form'), ('U', 'U-Form')), default='I')
     
     # Article number management
@@ -344,3 +344,18 @@ class GNXChamberConfiguration(models.Model):
     
     class Meta:
         verbose_name_plural = "GN X Chamber Configurations"
+
+
+class HVBStuetze(models.Model):
+    """HVB Support articles (Stütze) - Oben and Unter articles for each HVB diameter"""
+    hvb_durchmesser = models.CharField(max_length=10)  # e.g., "63", "75", "90"
+    position = models.CharField(max_length=10, choices=[('Oben', 'Oben'), ('Unter', 'Unter')])
+    artikelnummer = models.CharField(max_length=50)
+    artikelbezeichnung = models.CharField(max_length=200)
+    
+    class Meta:
+        unique_together = ['hvb_durchmesser', 'position']
+        verbose_name_plural = "HVB Stützen"
+    
+    def __str__(self):
+        return f"HVB {self.hvb_durchmesser}mm - {self.position}: {self.artikelnummer}"
