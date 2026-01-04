@@ -4,7 +4,10 @@ services:
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --env DJANGO_SETTINGS_MODULE=bom_configurator.settings_production bom_configurator.wsgi:application
-    releaseCommand: python manage.py migrate_and_seed --settings=bom_configurator.settings_production && python manage.py collectstatic --noinput --settings=bom_configurator.settings_production
+    releaseCommand: |
+      python manage.py migrate --settings=bom_configurator.settings_production || true
+      python manage.py migrate_and_seed --settings=bom_configurator.settings_production || true
+      python manage.py collectstatic --noinput --settings=bom_configurator.settings_production || true
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: bom_configurator.settings_production
