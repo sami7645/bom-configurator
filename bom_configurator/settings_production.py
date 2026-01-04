@@ -29,7 +29,8 @@ DATABASES = {
 }
 
 # Static files for production
-STATIC_ROOT = BASE_DIR / "staticfiles"
+# Ensure STATIC_ROOT is a string path, not Path object
+STATIC_ROOT = str(BASE_DIR / "staticfiles")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Security settings
