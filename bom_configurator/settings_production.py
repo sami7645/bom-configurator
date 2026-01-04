@@ -4,7 +4,8 @@ import os
 import dj_database_url
 
 # Override settings for production
-DEBUG = False
+# Temporarily enable DEBUG to see errors - set to False after fixing
+DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 # Add WhiteNoise middleware for static files
