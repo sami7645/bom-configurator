@@ -2,7 +2,7 @@ services:
   - type: web
     name: bom-configurator
     env: python
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput --settings=bom_configurator.settings_production
     startCommand: gunicorn --env DJANGO_SETTINGS_MODULE=bom_configurator.settings_production bom_configurator.wsgi:application
     releaseCommand: python manage.py migrate_and_seed --settings=bom_configurator.settings_production
     envVars:
