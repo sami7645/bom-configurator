@@ -21,12 +21,12 @@ $(document).ready(function() {
         validateSondenanzahl();
     });
     // Sonden Durchmesser dropdown is now based only on Schachttyp (from CSV)
+    // But only load it when entering step 2, not when Schachttyp changes in step 1
     $('#schachttyp').on('change', function() {
         updateHvbOptions();
         checkGNXChamber();
         updateSondenanzahlFromSchachtgrenze();
-        // Update Sonden Durchmesser dropdown based on selected Schachttyp from CSV
-        updateSondenOptions();
+        // Don't update Sonden Durchmesser here - it will be loaded when entering step 2
     });
     
     // Initialize sondenanzahl range if schachttyp is already selected (e.g., on page load)
@@ -616,6 +616,12 @@ function updateHvbOptions() {
 }
 
 function updateSondenOptions() {
+    // Check if dropdown exists (only exists in step 2)
+    if ($('#sondenDurchmesser').length === 0) {
+        console.log('Sonden Durchmesser dropdown not found - probably still in step 1');
+        return;
+    }
+    
     // Get values directly from DOM elements (most reliable)
     const schachttyp = $('#schachttyp').val() || '';
     
@@ -664,9 +670,12 @@ function updateSondenOptions() {
         },
         error: function(xhr, status, error) {
             console.error('AJAX error:', error, xhr.responseText);
-            $('#sondenDurchmesser').html('<option value="">Fehler beim Laden</option>');
-            if (typeof BOMConfigurator !== 'undefined' && BOMConfigurator.showAlert) {
-                BOMConfigurator.showAlert('Fehler beim Laden der Sonden-Durchmesser-Optionen.', 'danger');
+            // Only update dropdown if it exists (we're in step 2)
+            if ($('#sondenDurchmesser').length > 0) {
+                $('#sondenDurchmesser').html('<option value="">Fehler beim Laden</option>');
+                if (typeof BOMConfigurator !== 'undefined' && BOMConfigurator.showAlert) {
+                    BOMConfigurator.showAlert('Fehler beim Laden der Sonden-Durchmesser-Optionen.', 'danger');
+                }
             }
         }
     });
