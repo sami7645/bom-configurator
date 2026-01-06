@@ -314,24 +314,31 @@ def build_kugelhahn_components(config, context) -> List[Dict]:
             }
         )
 
-    # Special case: GN Einschweißteil DA 63 mm (2001179) should be included
+    # Special case: GN Einschweißteil DA 63 mm should be included
     # whenever HVB = 63mm, regardless of Kugelhahn type
-    # This item is only in "DN 25 / DA 32" section but applies to all types
+    # Dynamically find any Einschweißteil with DA 63 that matches HVB = 63mm
+    # This works for current and future DA 63 Einschweißteil items
     if hvb_size == "63":
-        da63_einschweiss = Kugelhahn.objects.filter(
-            artikelnummer=2001179.0
-        ).first()
-        if da63_einschweiss:
-            # Check ET-HVB compatibility (should be DA 63)
-            if da63_einschweiss.et_hvb and check_compatibility(da63_einschweiss.et_hvb, hvb_size, probe_size, 'hvb'):
-                quantity = calculate_formula("=sondenanzahl", context)
-                if quantity and quantity > 0:
-                    items.append({
-                        "artikelnummer": format_artikelnummer(da63_einschweiss.artikelnummer),
-                        "artikelbezeichnung": da63_einschweiss.artikelbezeichnung,
-                        "menge": _decimal(quantity),
-                        "source_table": "Kugelhahn",
-                    })
+        import re
+        # Find all Einschweißteil items and check if they're DA 63
+        all_einschweiss = Kugelhahn.objects.filter(
+            artikelbezeichnung__icontains="Einschweißteil"
+        )
+        for entry in all_einschweiss:
+            # Extract DA size from description (e.g., "DA 63 mm" -> "63")
+            da_match = re.search(r'DA\s+(\d{2,3})\s*mm', entry.artikelbezeichnung or "", re.IGNORECASE)
+            if da_match and da_match.group(1) == "63":
+                # Check ET-HVB compatibility (should be DA 63)
+                if entry.et_hvb and check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
+                    quantity = calculate_formula("=sondenanzahl", context)
+                    if quantity and quantity > 0:
+                        items.append({
+                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
+                            "artikelbezeichnung": entry.artikelbezeichnung,
+                            "menge": _decimal(quantity),
+                            "source_table": "Kugelhahn",
+                        })
+                        break  # Only add one DA 63 Einschweißteil
     
     entries = Kugelhahn.objects.filter(kugelhahn=kugelhahn_type)
     for entry in entries:
@@ -519,25 +526,31 @@ def build_dfm_kugelhahn_components(config, context) -> List[Dict]:
             }
         )
 
-    # Special case: GN Einschweißteil DA 63 mm (2001179) should be included
+    # Special case: GN Einschweißteil DA 63 mm should be included
     # whenever HVB = 63mm, regardless of D-Kugelhahn type
-    # This item is only in "DN 25 / DA 32" section but applies to all types
+    # Dynamically find any Einschweißteil with DA 63 that matches HVB = 63mm
     # Only add if regular Kugelhahn is not set (to avoid duplicate)
     if hvb_size == "63" and not config.kugelhahn_type:
-        da63_einschweiss = Kugelhahn.objects.filter(
-            artikelnummer=2001179.0
-        ).first()
-        if da63_einschweiss:
-            # Check ET-HVB compatibility (should be DA 63)
-            if da63_einschweiss.et_hvb and check_compatibility(da63_einschweiss.et_hvb, hvb_size, probe_size, 'hvb'):
-                quantity = calculate_formula("=sondenanzahl", context)
-                if quantity and quantity > 0:
-                    items.append({
-                        "artikelnummer": format_artikelnummer(da63_einschweiss.artikelnummer),
-                        "artikelbezeichnung": da63_einschweiss.artikelbezeichnung,
-                        "menge": _decimal(quantity),
-                        "source_table": "D-Kugelhahn",
-                    })
+        import re
+        # Find all Einschweißteil items and check if they're DA 63
+        all_einschweiss = Kugelhahn.objects.filter(
+            artikelbezeichnung__icontains="Einschweißteil"
+        )
+        for entry in all_einschweiss:
+            # Extract DA size from description (e.g., "DA 63 mm" -> "63")
+            da_match = re.search(r'DA\s+(\d{2,3})\s*mm', entry.artikelbezeichnung or "", re.IGNORECASE)
+            if da_match and da_match.group(1) == "63":
+                # Check ET-HVB compatibility (should be DA 63)
+                if entry.et_hvb and check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
+                    quantity = calculate_formula("=sondenanzahl", context)
+                    if quantity and quantity > 0:
+                        items.append({
+                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
+                            "artikelbezeichnung": entry.artikelbezeichnung,
+                            "menge": _decimal(quantity),
+                            "source_table": "D-Kugelhahn",
+                        })
+                        break  # Only add one DA 63 Einschweißteil
     
     entries = Kugelhahn.objects.filter(kugelhahn=dfm_kugelhahn_type)
     print(f"DEBUG build_dfm_kugelhahn_components: Found {entries.count()} entries for dfm_kugelhahn_type='{dfm_kugelhahn_type}'")
