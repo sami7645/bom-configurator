@@ -112,6 +112,14 @@ def get_sonden_durchmesser_options(request):
                 'error': 'Missing schachttyp'
             })
         
+        # Check if any data exists in SondenDurchmesser table
+        total_count = SondenDurchmesser.objects.count()
+        if total_count == 0:
+            return JsonResponse({
+                'sonden_durchmesser_options': [],
+                'error': 'CSV data not imported. Please run: python manage.py import_csv_data --force'
+            }, status=500)
+        
         # Get probe diameters for this schacht type from SondenDurchmesser model
         # Use case-insensitive matching and handle potential whitespace differences
         schachttyp_clean = schachttyp.strip()
