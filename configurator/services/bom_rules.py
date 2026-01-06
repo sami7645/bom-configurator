@@ -92,17 +92,35 @@ def build_stumpfschweiss_endkappen(config) -> List[Dict]:
         )
 
     if config.schachttyp == "Verteiler":
-        cap = StumpfschweissEndkappe.objects.filter(artikelnummer="2000569").first()
+        # Dynamic: Find normal version (not short) for Verteiler
+        # Look for caps that are NOT short version (is_short_version=False or None)
+        cap = StumpfschweissEndkappe.objects.filter(
+            is_short_version=False
+        ).first()
+        if not cap:
+            # Fallback: if no is_short_version field, get first available
+            cap = StumpfschweissEndkappe.objects.first()
         add_cap(cap, 2)
         return items
 
     if hvb_size == "63":
+        # Dynamic: Find short version for HVB 63mm
         short_cap = StumpfschweissEndkappe.objects.filter(
             hvb_durchmesser="63", is_short_version=True
         ).first()
+        # Dynamic: Find normal version (not short) for HVB 63mm
         normal_cap = StumpfschweissEndkappe.objects.filter(
-            artikelnummer="2000569"
+            hvb_durchmesser="63", is_short_version=False
         ).first()
+        if not normal_cap:
+            # Fallback: if no is_short_version field, get first non-short by description
+            normal_cap = StumpfschweissEndkappe.objects.filter(
+                hvb_durchmesser="63"
+            ).exclude(
+                artikelbezeichnung__icontains="kurz"
+            ).exclude(
+                artikelbezeichnung__icontains="short"
+            ).first()
         add_cap(short_cap, 1)
         add_cap(normal_cap, 1)
         return items
@@ -125,26 +143,46 @@ def build_entlueftung_components(config, context=None) -> List[Dict]:
     hvb_size = str(config.hvb_size)
     probe_size = str(config.sonden_durchmesser)
     
-    # Articles that should always be included from Entlüftung
-    # According to requirements:
-    # - 2001029: Absperrventil Kunststoff - Kugelhahn DA 32 mm x 1" AG – Einlegeteil
-    # - 2000718: Verschluss - Endkappe 1 IG"
-    # - 2000852: Absperrventil Kunststoff - Kugelhahn DA 32 mm ohne Einlegeteil (also appears in Kugelhahn, but included separately)
-    # - 2001167: Absperrventil - KST - ZUB - KH32 - Überwurfmutter - SKS (quantity 4 from Entlüftung is additive to Kugelhahn/DFM quantities)
-    # All other articles from Entlüftung are excluded
-    always_include_articles = {
-        "2001029",  # Absperrventil Kunststoff - Kugelhahn DA 32 mm x 1" AG – Einlegeteil
-        "2000718",  # Verschluss - Endkappe 1 IG"
-        "2000852",  # Absperrventil Kunststoff - Kugelhahn DA 32 mm ohne Einlegeteil
-        "2001167",  # Absperrventil - KST - ZUB - KH32 - Überwurfmutter - SKS (additive quantity from Entlüftung)
-    }
+    # Dynamic detection: Include Entlüftung articles that also appear in Kugelhahn or DFM
+    # Business rule: "always included, even if in Kugelhahn/DFM" means these are cross-referenced articles
+    # This makes it dynamic - any article that exists in both Entlüftung and Kugelhahn/DFM will be included
+    from ..models import Kugelhahn, DFM
+    
+    # Build sets of article numbers from Kugelhahn and DFM (for cross-reference check)
+    kugelhahn_artikelnummern = set(
+        Kugelhahn.objects.exclude(artikelnummer__isnull=True)
+        .exclude(artikelnummer='')
+        .values_list('artikelnummer', flat=True)
+    )
+    dfm_artikelnummern = set(
+        DFM.objects.exclude(artikelnummer__isnull=True)
+        .exclude(artikelnummer='')
+        .values_list('artikelnummer', flat=True)
+    )
+    
+    # Also include articles with specific patterns that indicate they should always be included
+    # Pattern 1: "Endkappe" (closure caps) - always included
+    # Pattern 2: Articles that appear in both Entlüftung and Kugelhahn/DFM
+    def should_include_entlueftung_article(part):
+        artikelnummer = format_artikelnummer(part.artikelnummer)
+        beschreibung = (part.artikelbezeichnung or "").lower()
+        
+        # Always include "Endkappe" (closure caps)
+        if "endkappe" in beschreibung:
+            return True
+        
+        # Include if article also exists in Kugelhahn or DFM (cross-referenced)
+        if artikelnummer in kugelhahn_artikelnummern or artikelnummer in dfm_artikelnummern:
+            return True
+        
+        return False
     
     # Kugelhahn articles that should be labeled based on Kugelhahn type
-    kugelhahn_articles = {
-        "2001029",  # DA 32
-        "2000852",  # DA 32
-        "2001167",  # DA 32 (KH32)
-    }
+    # Dynamically detect: articles with "Kugelhahn" in description that also exist in Kugelhahn table
+    def is_kugelhahn_article(part):
+        artikelnummer = format_artikelnummer(part.artikelnummer)
+        beschreibung = (part.artikelbezeichnung or "").lower()
+        return artikelnummer in kugelhahn_artikelnummern and "kugelhahn" in beschreibung
     
     # Determine which Kugelhahn type to use for labeling
     # DA 32 articles belong to regular Kugelhahn (DN 25 / DA 32)
@@ -170,15 +208,14 @@ def build_entlueftung_components(config, context=None) -> List[Dict]:
         
         artikelnummer = format_artikelnummer(part.artikelnummer)
         
-        # Only include articles that are in the always_include list
-        # This ensures only the specified components (2001029, 2000718, 2000852, 2001167) are included
-        # Article 2001167's quantity from Entlüftung is additive to its quantities from Kugelhahn/DFM
-        # All other articles from Entlüftung are excluded, even if they don't appear in Kugelhahn/DFM
-        if artikelnummer not in always_include_articles:
+        # Dynamic inclusion: Only include articles that match business rules
+        # Rule: Include articles that also appear in Kugelhahn/DFM OR are "Endkappe" type
+        if not should_include_entlueftung_article(part):
             continue
         
         # Determine source_table: Kugelhahn articles should be labeled based on Kugelhahn type
-        if artikelnummer in kugelhahn_articles and kugelhahn_source:
+        # Dynamically detect if this is a Kugelhahn article (appears in Kugelhahn table and has "Kugelhahn" in description)
+        if is_kugelhahn_article(part) and kugelhahn_source:
             source_table = kugelhahn_source
         else:
             source_table = "Entlüftung"
