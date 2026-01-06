@@ -666,7 +666,12 @@ function updateSondenOptions() {
                 }
             }
             
-            $('#sondenDurchmesser').html(options);
+            // Only update dropdown if it exists (we're in step 2)
+            if ($('#sondenDurchmesser').length > 0) {
+                $('#sondenDurchmesser').html(options);
+            } else {
+                console.log('Sonden Durchmesser dropdown not found - skipping update');
+            }
         },
         error: function(xhr, status, error) {
             console.error('AJAX error:', error, xhr.responseText);
