@@ -674,12 +674,17 @@ function updateSondenOptions() {
             }
         },
         error: function(xhr, status, error) {
-            console.error('AJAX error:', error, xhr.responseText);
+            console.error('AJAX error:', error);
+            console.error('Response:', xhr.responseText);
+            console.error('Status:', xhr.status);
             // Only update dropdown if it exists (we're in step 2)
             if ($('#sondenDurchmesser').length > 0) {
                 $('#sondenDurchmesser').html('<option value="">Fehler beim Laden</option>');
+                // Show detailed error in console, but user-friendly message
+                const errorMsg = xhr.responseText ? JSON.parse(xhr.responseText).error || 'Unbekannter Fehler' : 'Server-Fehler';
+                console.error('Detailed error:', errorMsg);
                 if (typeof BOMConfigurator !== 'undefined' && BOMConfigurator.showAlert) {
-                    BOMConfigurator.showAlert('Fehler beim Laden der Sonden-Durchmesser-Optionen.', 'danger');
+                    BOMConfigurator.showAlert('Fehler beim Laden der Sonden-Durchmesser-Optionen: ' + errorMsg, 'danger');
                 }
             }
         }

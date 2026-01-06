@@ -115,20 +115,35 @@ def get_sonden_durchmesser_options(request):
         # Get probe diameters for this schacht type from SondenDurchmesser model
         # Use case-insensitive matching and handle potential whitespace differences
         schachttyp_clean = schachttyp.strip()
-        durchmesser_list = SondenDurchmesser.objects.filter(
-            schachttyp__iexact=schachttyp_clean
-        ).values_list('durchmesser', flat=True).distinct()
         
-        # If no exact match, try without case sensitivity and with trimmed values
+        # Debug: Log what we're searching for
+        print(f"DEBUG: Searching for schachttyp: '{schachttyp_clean}'")
+        
+        # First try exact match (case-insensitive)
+        durchmesser_list = list(SondenDurchmesser.objects.filter(
+            schachttyp__iexact=schachttyp_clean
+        ).values_list('durchmesser', flat=True).distinct())
+        
+        print(f"DEBUG: Found {len(durchmesser_list)} diameters with exact match")
+        
+        # If no exact match, try fuzzy matching
         if not durchmesser_list:
-            # Try to find by matching any schachttyp that contains the search term
+            # Get all schacht types from database
             all_schacht_types = SondenDurchmesser.objects.values_list('schachttyp', flat=True).distinct()
+            print(f"DEBUG: Available schacht types in DB: {list(all_schacht_types)}")
+            
+            # Try to find by matching (normalize both sides)
+            search_normalized = schachttyp_clean.lower().replace(' ', '')
             for st in all_schacht_types:
-                if st.strip().lower() == schachttyp_clean.lower():
-                    durchmesser_list = SondenDurchmesser.objects.filter(
+                st_normalized = st.strip().lower().replace(' ', '')
+                if st_normalized == search_normalized:
+                    print(f"DEBUG: Found fuzzy match: '{st}' matches '{schachttyp_clean}'")
+                    durchmesser_list = list(SondenDurchmesser.objects.filter(
                         schachttyp=st
-                    ).values_list('durchmesser', flat=True).distinct()
+                    ).values_list('durchmesser', flat=True).distinct())
                     break
+        
+        print(f"DEBUG: Final result: {len(durchmesser_list)} diameters - {list(durchmesser_list)}")
         
         # Sort numerically
         durchmesser_list = sorted(
