@@ -113,9 +113,22 @@ def get_sonden_durchmesser_options(request):
             })
         
         # Get probe diameters for this schacht type from SondenDurchmesser model
+        # Use case-insensitive matching and handle potential whitespace differences
+        schachttyp_clean = schachttyp.strip()
         durchmesser_list = SondenDurchmesser.objects.filter(
-            schachttyp__iexact=schachttyp
+            schachttyp__iexact=schachttyp_clean
         ).values_list('durchmesser', flat=True).distinct()
+        
+        # If no exact match, try without case sensitivity and with trimmed values
+        if not durchmesser_list:
+            # Try to find by matching any schachttyp that contains the search term
+            all_schacht_types = SondenDurchmesser.objects.values_list('schachttyp', flat=True).distinct()
+            for st in all_schacht_types:
+                if st.strip().lower() == schachttyp_clean.lower():
+                    durchmesser_list = SondenDurchmesser.objects.filter(
+                        schachttyp=st
+                    ).values_list('durchmesser', flat=True).distinct()
+                    break
         
         # Sort numerically
         durchmesser_list = sorted(
