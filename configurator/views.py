@@ -34,7 +34,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Q
 from .models import (
-    Schacht, HVB, Sondengroesse, Sondenabstand, Kugelhahn, DFM,
+    Schacht, HVB, Sondengroesse, Sondenabstand, SondenDurchmesser, Kugelhahn, DFM,
     BOMConfiguration, BOMItem, GNXChamberArticle, GNXChamberConfiguration,
     Schachtgrenze
 )
@@ -96,6 +96,50 @@ def configurator(request):
         'plastic_flowmeters': sorted(plastic_flowmeters),
     }
     return render(request, 'configurator/configurator.html', context)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_sonden_durchmesser_options(request):
+    """Get Sonden Durchmesser options based on selected schachttyp"""
+    try:
+        data = json.loads(request.body)
+        schachttyp = data.get('schachttyp', '').strip()
+        
+        if not schachttyp:
+            return JsonResponse({
+                'sonden_durchmesser_options': [],
+                'error': 'Missing schachttyp'
+            })
+        
+        # Get probe diameters for this schacht type from SondenDurchmesser model
+        durchmesser_list = SondenDurchmesser.objects.filter(
+            schachttyp__iexact=schachttyp
+        ).values_list('durchmesser', flat=True).distinct()
+        
+        # Sort numerically
+        durchmesser_list = sorted(
+            durchmesser_list,
+            key=lambda x: int(x) if x.isdigit() else 9999
+        )
+        
+        # Format as options
+        options = [{'durchmesser': d, 'label': f'{d}mm'} for d in durchmesser_list]
+        
+        return JsonResponse({
+            'sonden_durchmesser_options': options,
+            'schachttyp': schachttyp
+        })
+    
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Sonden Durchmesser Options Error: {str(e)}")
+        print(f"Traceback: {error_trace}")
+        return JsonResponse({
+            'sonden_durchmesser_options': [],
+            'error': str(e)
+        }, status=500)
 
 
 @csrf_exempt

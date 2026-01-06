@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from configurator.models import (
-    Schacht, HVB, Sondengroesse, Sondenabstand, Kugelhahn, DFM,
+    Schacht, HVB, Sondengroesse, Sondenabstand, SondenDurchmesser, Kugelhahn, DFM,
     Entlueftung, Sondenverschlusskappe, StumpfschweissEndkappe,
     WPVerschlusskappe, WPA, Verrohrung, Schachtgrenze,
     Schachtkompatibilitaet, CSVDataSource, GNXChamberArticle, HVBStuetze
@@ -40,6 +40,7 @@ class Command(BaseCommand):
             'Schacht.csv': self.import_schacht,
             'HVB.csv': self.import_hvb,
             'Sondengroesse - Sondenlaenge.csv': self.import_sondengroesse,
+            'Sonden Durchmesser.csv': self.import_sonden_durchmesser,
             'Sondenabstaende.csv': self.import_sondenabstand,
             'Kugelhaehne.csv': self.import_kugelhahn,
             'DFM.csv': self.import_dfm,
@@ -243,6 +244,52 @@ class Command(BaseCommand):
                     hinweis=row.get('Hinweis', '')
                 )
                 count += 1
+        return count
+
+    def import_sonden_durchmesser(self, file_path):
+        """Import Sonden Durchmesser data - matrix format where columns are schacht types and rows are diameters"""
+        SondenDurchmesser.objects.all().delete()
+        count = 0
+        
+        # Read CSV file manually to handle matrix format
+        import csv
+        encodings = ['utf-8-sig', 'utf-8', 'latin1', 'cp1252']
+        reader = None
+        
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding, newline='') as f:
+                    reader = list(csv.reader(f))
+                    break
+            except UnicodeDecodeError:
+                continue
+        
+        if not reader:
+            self.stdout.write(self.style.ERROR(f'Could not read file: {file_path}'))
+            return 0
+        
+        # First row contains schacht types (columns)
+        if len(reader) == 0:
+            return 0
+        
+        schacht_types = [col.strip() for col in reader[0] if col.strip()]
+        
+        # Subsequent rows contain probe diameters for each schacht type
+        for row_idx in range(1, len(reader)):
+            row = reader[row_idx]
+            for col_idx, durchmesser in enumerate(row):
+                if col_idx < len(schacht_types) and durchmesser and durchmesser.strip():
+                    schachttyp = schacht_types[col_idx]
+                    durchmesser_value = durchmesser.strip()
+                    # Only create if diameter is not empty
+                    if durchmesser_value:
+                        SondenDurchmesser.objects.get_or_create(
+                            schachttyp=schachttyp,
+                            durchmesser=durchmesser_value,
+                            defaults={}
+                        )
+                        count += 1
+        
         return count
 
     def import_sondenabstand(self, file_path):

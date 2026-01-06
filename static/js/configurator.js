@@ -9,7 +9,7 @@ $(document).ready(function() {
     initializeValidation();
     
     // Initialize dropdowns
-    $('#sondenDurchmesser').html('<option value="">Erst Schachttyp und HVB wählen...</option>');
+    $('#sondenDurchmesser').html('<option value="">Erst Schachttyp wählen...</option>');
     $('#sondenabstand').html('<option value="">Erst Anschlussart wählen...</option>');
     
     // Event handlers
@@ -618,51 +618,40 @@ function updateHvbOptions() {
 function updateSondenOptions() {
     // Get values directly from DOM elements (most reliable)
     const schachttyp = $('#schachttyp').val() || '';
-    const hvbSize = $('#hvbSize').val() || '';
     
-    console.log('updateSondenOptions called - schachttyp:', schachttyp, 'hvbSize:', hvbSize);
+    console.log('updateSondenOptions called - schachttyp:', schachttyp);
     
-    if (!schachttyp || !hvbSize) {
-        $('#sondenDurchmesser').html('<option value="">Erst Schachttyp und HVB wählen...</option>');
+    if (!schachttyp) {
+        $('#sondenDurchmesser').html('<option value="">Erst Schachttyp wählen...</option>');
         return;
     }
     
     // Clean values
     const cleanSchachttyp = schachttyp.trim();
-    let cleanHvbSize = hvbSize.trim();
-    // Remove 'mm' suffix if present
-    if (cleanHvbSize.toLowerCase().endsWith('mm')) {
-        cleanHvbSize = cleanHvbSize.slice(0, -2).trim();
-    }
     
     // Show loading state
     $('#sondenDurchmesser').html('<option value="">Lade Optionen...</option>');
     
-    // Make AJAX request
+    // Make AJAX request to get Sonden Durchmesser options from CSV
     $.ajax({
-        url: '/api/sonden-options/',
+        url: '/api/sonden-durchmesser-options/',
         method: 'POST',
         cache: false,
         data: JSON.stringify({
-            schachttyp: cleanSchachttyp,
-            hvb_size: cleanHvbSize
+            schachttyp: cleanSchachttyp
         }),
         contentType: 'application/json',
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
         },
         success: function(data) {
-            console.log('API success - options count:', data.sonden_options ? data.sonden_options.length : 0);
+            console.log('API success - Sonden Durchmesser options count:', data.sonden_durchmesser_options ? data.sonden_durchmesser_options.length : 0);
             
             let options = '<option value="">Bitte wählen...</option>';
             
-            if (data.sonden_options && data.sonden_options.length > 0) {
-                data.sonden_options.forEach(function(option) {
-                    options += `<option value="${option.durchmesser_sonde}" 
-                               data-min="${option.sondenanzahl_min}" 
-                               data-max="${option.sondenanzahl_max}">
-                               ${option.durchmesser_sonde}mm - ${option.artikelbezeichnung}
-                               </option>`;
+            if (data.sonden_durchmesser_options && data.sonden_durchmesser_options.length > 0) {
+                data.sonden_durchmesser_options.forEach(function(option) {
+                    options += `<option value="${option.durchmesser}">${option.label}</option>`;
                 });
             } else {
                 options = '<option value="">Keine Optionen verfügbar</option>';
@@ -677,7 +666,7 @@ function updateSondenOptions() {
             console.error('AJAX error:', error, xhr.responseText);
             $('#sondenDurchmesser').html('<option value="">Fehler beim Laden</option>');
             if (typeof BOMConfigurator !== 'undefined' && BOMConfigurator.showAlert) {
-                BOMConfigurator.showAlert('Fehler beim Laden der Sonden-Optionen.', 'danger');
+                BOMConfigurator.showAlert('Fehler beim Laden der Sonden-Durchmesser-Optionen.', 'danger');
             }
         }
     });

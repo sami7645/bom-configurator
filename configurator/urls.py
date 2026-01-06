@@ -9,6 +9,7 @@ urlpatterns = [
     path('configuration/<int:config_id>/delete/', views.delete_configuration, name='delete_configuration'),
     
     # API endpoints
+    path('api/sonden-durchmesser-options/', views.get_sonden_durchmesser_options, name='get_sonden_durchmesser_options'),
     path('api/sonden-options/', views.get_sonden_options, name='get_sonden_options'),
     path('api/sondenabstand-options/', views.get_sondenabstand_options, name='get_sondenabstand_options'),
     path('api/allowed-hvb-sizes/', views.get_allowed_hvb_sizes, name='get_allowed_hvb_sizes'),
