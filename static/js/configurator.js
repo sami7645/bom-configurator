@@ -13,10 +13,6 @@ $(document).ready(function() {
     $('#sondenabstand').html('<option value="">Erst Anschlussart wählen...</option>');
     
     // Event handlers
-    // Sonden Durchmesser dropdown is now based only on Schachttyp (from CSV)
-    $('#schachttyp').on('change', function() {
-        updateSondenOptions();
-    });
     $('#anschlussart').on('change', updateSondenabstandOptions);
     // Note: updateSondenanzahlRange is now based on Schachtgrenze (schachttyp), not sondenDurchmesser
     // But we keep the handler for backward compatibility
@@ -24,11 +20,12 @@ $(document).ready(function() {
         // Range is set by schachttyp, but we can validate the current value
         validateSondenanzahl();
     });
+    // Sonden Durchmesser dropdown is now based only on Schachttyp (from CSV)
     $('#schachttyp').on('change', function() {
         updateHvbOptions();
         checkGNXChamber();
         updateSondenanzahlFromSchachtgrenze();
-        // Update Sonden Durchmesser dropdown based on selected Schachttyp
+        // Update Sonden Durchmesser dropdown based on selected Schachttyp from CSV
         updateSondenOptions();
     });
     
