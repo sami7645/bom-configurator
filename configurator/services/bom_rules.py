@@ -314,6 +314,25 @@ def build_kugelhahn_components(config, context) -> List[Dict]:
             }
         )
 
+    # Special case: GN Einschweißteil DA 63 mm (2001179) should be included
+    # whenever HVB = 63mm, regardless of Kugelhahn type
+    # This item is only in "DN 25 / DA 32" section but applies to all types
+    if hvb_size == "63":
+        da63_einschweiss = Kugelhahn.objects.filter(
+            artikelnummer=2001179.0
+        ).first()
+        if da63_einschweiss:
+            # Check ET-HVB compatibility (should be DA 63)
+            if da63_einschweiss.et_hvb and check_compatibility(da63_einschweiss.et_hvb, hvb_size, probe_size, 'hvb'):
+                quantity = calculate_formula("=sondenanzahl", context)
+                if quantity and quantity > 0:
+                    items.append({
+                        "artikelnummer": format_artikelnummer(da63_einschweiss.artikelnummer),
+                        "artikelbezeichnung": da63_einschweiss.artikelbezeichnung,
+                        "menge": _decimal(quantity),
+                        "source_table": "Kugelhahn",
+                    })
+    
     entries = Kugelhahn.objects.filter(kugelhahn=kugelhahn_type)
     for entry in entries:
         if not entry.artikelnummer:
@@ -360,8 +379,12 @@ def build_kugelhahn_components(config, context) -> List[Dict]:
             #    - Used ONLY for HVB
             #    - Only when HVB = 63mm (ET-HVB = DA 63)
             #    - Quantity = sondenanzahl (override static 1.0)
+            #    - Already handled above for all Kugelhahn types when HVB = 63mm
             if article_da_size == "63":
-                # Check ET-HVB compatibility (should be DA 63)
+                # Skip if already added in special case above (when HVB = 63mm)
+                if hvb_size == "63":
+                    continue
+                # Otherwise, check ET-HVB compatibility (should be DA 63)
                 if entry.et_hvb and check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
                     # Override static quantity to sondenanzahl
                     quantity = calculate_formula("=sondenanzahl", context)
@@ -496,6 +519,26 @@ def build_dfm_kugelhahn_components(config, context) -> List[Dict]:
             }
         )
 
+    # Special case: GN Einschweißteil DA 63 mm (2001179) should be included
+    # whenever HVB = 63mm, regardless of D-Kugelhahn type
+    # This item is only in "DN 25 / DA 32" section but applies to all types
+    # Only add if regular Kugelhahn is not set (to avoid duplicate)
+    if hvb_size == "63" and not config.kugelhahn_type:
+        da63_einschweiss = Kugelhahn.objects.filter(
+            artikelnummer=2001179.0
+        ).first()
+        if da63_einschweiss:
+            # Check ET-HVB compatibility (should be DA 63)
+            if da63_einschweiss.et_hvb and check_compatibility(da63_einschweiss.et_hvb, hvb_size, probe_size, 'hvb'):
+                quantity = calculate_formula("=sondenanzahl", context)
+                if quantity and quantity > 0:
+                    items.append({
+                        "artikelnummer": format_artikelnummer(da63_einschweiss.artikelnummer),
+                        "artikelbezeichnung": da63_einschweiss.artikelbezeichnung,
+                        "menge": _decimal(quantity),
+                        "source_table": "D-Kugelhahn",
+                    })
+    
     entries = Kugelhahn.objects.filter(kugelhahn=dfm_kugelhahn_type)
     print(f"DEBUG build_dfm_kugelhahn_components: Found {entries.count()} entries for dfm_kugelhahn_type='{dfm_kugelhahn_type}'")
     for entry in entries:
@@ -542,8 +585,12 @@ def build_dfm_kugelhahn_components(config, context) -> List[Dict]:
             #    - Used ONLY for HVB
             #    - Only when HVB = 63mm (ET-HVB = DA 63)
             #    - Quantity = sondenanzahl (override static 1.0)
+            #    - Already handled above for all D-Kugelhahn types when HVB = 63mm
             if article_da_size == "63":
-                # Check ET-HVB compatibility (should be DA 63)
+                # Skip if already added in special case above (when HVB = 63mm)
+                if hvb_size == "63":
+                    continue
+                # Otherwise, check ET-HVB compatibility (should be DA 63)
                 if entry.et_hvb and check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
                     # Override static quantity to sondenanzahl
                     quantity = calculate_formula("=sondenanzahl", context)
