@@ -555,17 +555,89 @@ def check_existing_configuration(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def get_gnx_chamber_articles(request):
-    """Get GN X chamber articles based on HVB size"""
+    """Get GN X chamber articles based on HVB size - only return articles that exist in product data"""
     data = json.loads(request.body)
     hvb_size = int(data.get('hvb_size', 0))
     
-    articles = GNXChamberArticle.objects.filter(
+    # Get all potential articles for this HVB size
+    potential_articles = GNXChamberArticle.objects.filter(
         hvb_size_min__lte=hvb_size,
         hvb_size_max__gte=hvb_size
-    ).values('id', 'artikelnummer', 'artikelbezeichnung', 'is_automatic')
+    )
+    
+    # Build a set of all valid article numbers from product tables
+    from .models import Kugelhahn, DFM, Entlueftung, HVBStuetze, Sondenverschlusskappe, StumpfschweissEndkappe
+    
+    valid_artikelnummern = set()
+    
+    # Collect from all product tables
+    valid_artikelnummern.update(
+        Kugelhahn.objects.exclude(artikelnummer__isnull=True)
+        .exclude(artikelnummer='')
+        .values_list('artikelnummer', flat=True)
+    )
+    valid_artikelnummern.update(
+        DFM.objects.exclude(artikelnummer__isnull=True)
+        .exclude(artikelnummer='')
+        .values_list('artikelnummer', flat=True)
+    )
+    valid_artikelnummern.update(
+        Entlueftung.objects.exclude(artikelnummer__isnull=True)
+        .exclude(artikelnummer='')
+        .values_list('artikelnummer', flat=True)
+    )
+    valid_artikelnummern.update(
+        Sondenverschlusskappe.objects.exclude(artikelnummer__isnull=True)
+        .exclude(artikelnummer='')
+        .values_list('artikelnummer', flat=True)
+    )
+    valid_artikelnummern.update(
+        StumpfschweissEndkappe.objects.exclude(artikelnummer__isnull=True)
+        .exclude(artikelnummer='')
+        .values_list('artikelnummer', flat=True)
+    )
+    
+    # CRITICAL: Exclude HVBStuetze articles - they are already handled by build_hvb_stuetze_components
+    # These should NOT appear as "Zusatzartikel" in Step 3
+    hvbstuetze_artikelnummern = set(
+        HVBStuetze.objects.exclude(artikelnummer__isnull=True)
+        .exclude(artikelnummer='')
+        .values_list('artikelnummer', flat=True)
+    )
+    
+    # Normalize article numbers (remove .0 suffix, convert to string)
+    valid_artikelnummern_normalized = set()
+    for num in valid_artikelnummern:
+        if num:
+            # Convert to string and remove .0 if present
+            num_str = str(num).replace('.0', '').strip()
+            if num_str:
+                valid_artikelnummern_normalized.add(num_str)
+    
+    # Normalize HVBStuetze article numbers for exclusion
+    hvbstuetze_artikelnummern_normalized = set()
+    for num in hvbstuetze_artikelnummern:
+        if num:
+            num_str = str(num).replace('.0', '').strip()
+            if num_str:
+                hvbstuetze_artikelnummern_normalized.add(num_str)
+    
+    # Filter articles to only include those with valid article numbers
+    # BUT exclude articles that are already in HVBStuetze (they're handled separately)
+    valid_articles = []
+    for article in potential_articles:
+        artikelnummer = str(article.artikelnummer).replace('.0', '').strip()
+        # Must exist in product data AND not be an HVBStuetze article
+        if artikelnummer in valid_artikelnummern_normalized and artikelnummer not in hvbstuetze_artikelnummern_normalized:
+            valid_articles.append({
+                'id': article.id,
+                'artikelnummer': article.artikelnummer,
+                'artikelbezeichnung': article.artikelbezeichnung,
+                'is_automatic': article.is_automatic
+            })
     
     return JsonResponse({
-        'articles': list(articles)
+        'articles': valid_articles
     })
 
 
@@ -705,70 +777,145 @@ def generate_bom(request):
             )
             bom_items.append(bom_item)
         
-        # Add Sonden items
-        sonden = Sondengroesse.objects.filter(
+        # Add Sonden items (probe pipes)
+        # Dynamic selection: Match by probe diameter and schachttyp, then find best match by sondenanzahl range
+        # HVB size is NOT used for filtering - probe pipes are selected based on probe diameter
+        sonden_candidates = Sondengroesse.objects.filter(
             durchmesser_sonde=config.sonden_durchmesser,
-            schachttyp=config.schachttyp,
-            hvb=config.hvb_size
+            schachttyp=config.schachttyp
         )
         
-        for sonde in sonden:
-            if sonde.artikelnummer:
-                # Calculate quantities based on Vorlauf/Rücklauf
-                # These are per-sonde lengths, so multiply by sondenanzahl
-                vorlauf_qty = sonde.vorlauf_laenge or Decimal('0')
-                ruecklauf_qty = sonde.ruecklauf_laenge or Decimal('0')
-                
-                if sonde.vorlauf_formel:
-                    calculated = calculate_formula(sonde.vorlauf_formel, calc_context)
-                    if calculated is not None:
-                        vorlauf_qty = calculated
-                
-                if sonde.ruecklauf_formel:
-                    calculated = calculate_formula(sonde.ruecklauf_formel, calc_context)
-                    if calculated is not None:
-                        ruecklauf_qty = calculated
-                
-                # Multiply by sondenanzahl to get total length for all sonden
-                total_qty = (vorlauf_qty + ruecklauf_qty) * Decimal(str(config.sondenanzahl))
-                print(f"DEBUG Sonden: Vorlauf={vorlauf_qty}, Ruecklauf={ruecklauf_qty}, Sondenanzahl={config.sondenanzahl}, Total={total_qty}")
-                
-                if total_qty > 0:
-                    bom_item = BOMItem.objects.create(
-                        configuration=config,
-                        artikelnummer=format_artikelnummer(sonde.artikelnummer),
-                        artikelbezeichnung=sonde.artikelbezeichnung,
-                        menge=total_qty,
-                        source_table='Sondengroesse'
-                    )
-                    print(f"DEBUG BOMItem created: Menge={bom_item.menge}, Type={type(bom_item.menge)}, String={str(bom_item.menge)}")
-                    bom_items.append(bom_item)
+        # Find the best match based on sondenanzahl being within the allowed range
+        # Priority: 1) sondenanzahl within range, 2) closest match
+        best_match = None
+        sondenanzahl = config.sondenanzahl or 0
+        
+        for sonde in sonden_candidates:
+            if not sonde.artikelnummer:
+                continue
+            
+            # Check if sondenanzahl is within the allowed range
+            min_count = sonde.sondenanzahl_min or 0
+            max_count = sonde.sondenanzahl_max or 999999
+            
+            if min_count <= sondenanzahl <= max_count:
+                # Perfect match - use this one
+                best_match = sonde
+                break
+            elif best_match is None:
+                # First candidate, use as fallback
+                best_match = sonde
+        
+        # If we found a match, add it to BOM
+        if best_match and best_match.artikelnummer:
+            # Calculate quantities based on Vorlauf/Rücklauf
+            # These are per-sonde lengths, so multiply by sondenanzahl
+            vorlauf_qty = best_match.vorlauf_laenge or Decimal('0')
+            ruecklauf_qty = best_match.ruecklauf_laenge or Decimal('0')
+            
+            if best_match.vorlauf_formel:
+                calculated = calculate_formula(best_match.vorlauf_formel, calc_context)
+                if calculated is not None:
+                    vorlauf_qty = calculated
+            
+            if best_match.ruecklauf_formel:
+                calculated = calculate_formula(best_match.ruecklauf_formel, calc_context)
+                if calculated is not None:
+                    ruecklauf_qty = calculated
+            
+            # Multiply by sondenanzahl to get total length for all sonden
+            total_qty = (vorlauf_qty + ruecklauf_qty) * Decimal(str(config.sondenanzahl))
+            print(f"DEBUG Sonden: Artikel={best_match.artikelnummer}, Vorlauf={vorlauf_qty}, Ruecklauf={ruecklauf_qty}, Sondenanzahl={config.sondenanzahl}, Total={total_qty}")
+            
+            if total_qty > 0:
+                bom_item = BOMItem.objects.create(
+                    configuration=config,
+                    artikelnummer=format_artikelnummer(best_match.artikelnummer),
+                    artikelbezeichnung=best_match.artikelbezeichnung,
+                    menge=total_qty,
+                    source_table='Sondengroesse'
+                )
+                print(f"DEBUG BOMItem created: Menge={bom_item.menge}, Type={type(bom_item.menge)}, String={str(bom_item.menge)}")
+                bom_items.append(bom_item)
         
         # Handle GN X chamber articles if applicable
         if config.schachttyp in ['GN X1', 'GN X2', 'GN X3', 'GN X4']:
+            # Build set of valid article numbers from all product tables
+            from .models import Kugelhahn, DFM, Entlueftung, HVBStuetze, Sondenverschlusskappe, StumpfschweissEndkappe
+            
+            valid_artikelnummern = set()
+            valid_artikelnummern.update(
+                Kugelhahn.objects.exclude(artikelnummer__isnull=True)
+                .exclude(artikelnummer='')
+                .values_list('artikelnummer', flat=True)
+            )
+            valid_artikelnummern.update(
+                DFM.objects.exclude(artikelnummer__isnull=True)
+                .exclude(artikelnummer='')
+                .values_list('artikelnummer', flat=True)
+            )
+            valid_artikelnummern.update(
+                Entlueftung.objects.exclude(artikelnummer__isnull=True)
+                .exclude(artikelnummer='')
+                .values_list('artikelnummer', flat=True)
+            )
+            valid_artikelnummern.update(
+                HVBStuetze.objects.exclude(artikelnummer__isnull=True)
+                .exclude(artikelnummer='')
+                .values_list('artikelnummer', flat=True)
+            )
+            valid_artikelnummern.update(
+                Sondenverschlusskappe.objects.exclude(artikelnummer__isnull=True)
+                .exclude(artikelnummer='')
+                .values_list('artikelnummer', flat=True)
+            )
+            valid_artikelnummern.update(
+                StumpfschweissEndkappe.objects.exclude(artikelnummer__isnull=True)
+                .exclude(artikelnummer='')
+                .values_list('artikelnummer', flat=True)
+            )
+            
+            # Normalize article numbers (remove .0 suffix, convert to string)
+            valid_artikelnummern_normalized = set()
+            for num in valid_artikelnummern:
+                if num:
+                    num_str = str(num).replace('.0', '').strip()
+                    if num_str:
+                        valid_artikelnummern_normalized.add(num_str)
+            
             gnx_articles_data = data.get('gnx_articles', [])
             for article_data in gnx_articles_data:
                 article_id = article_data.get('id')
                 custom_quantity = Decimal(str(article_data.get('quantity', 1)))
                 
-                gnx_article = GNXChamberArticle.objects.get(id=article_id)
-                
-                # Create GN X chamber configuration
-                GNXChamberConfiguration.objects.create(
-                    bom_configuration=config,
-                    gnx_article=gnx_article,
-                    custom_quantity=custom_quantity
-                )
-                
-                # Add to BOM items
-                bom_item = BOMItem.objects.create(
-                    configuration=config,
-                    artikelnummer=format_artikelnummer(gnx_article.artikelnummer),
-                    artikelbezeichnung=gnx_article.artikelbezeichnung,
-                    menge=custom_quantity,
-                    source_table='GNXChamberArticle'
-                )
-                bom_items.append(bom_item)
+                try:
+                    gnx_article = GNXChamberArticle.objects.get(id=article_id)
+                    
+                    # Validate article number exists in product data
+                    artikelnummer = str(gnx_article.artikelnummer).replace('.0', '').strip()
+                    if artikelnummer not in valid_artikelnummern_normalized:
+                        # Skip invalid articles - they don't exist in product data
+                        continue
+                    
+                    # Create GN X chamber configuration
+                    GNXChamberConfiguration.objects.create(
+                        bom_configuration=config,
+                        gnx_article=gnx_article,
+                        custom_quantity=custom_quantity
+                    )
+                    
+                    # Add to BOM items
+                    bom_item = BOMItem.objects.create(
+                        configuration=config,
+                        artikelnummer=format_artikelnummer(gnx_article.artikelnummer),
+                        artikelbezeichnung=gnx_article.artikelbezeichnung,
+                        menge=custom_quantity,
+                        source_table='GNXChamberArticle'
+                    )
+                    bom_items.append(bom_item)
+                except GNXChamberArticle.DoesNotExist:
+                    # Skip if article doesn't exist
+                    continue
         
         # Use rule-based builders for all configurations
         additional_components = []

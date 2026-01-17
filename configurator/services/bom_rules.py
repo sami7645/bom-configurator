@@ -46,31 +46,59 @@ def _compatibility_match(compat_value: str, hvb_size: str, sonden_durchmesser: s
 
 
 def build_sondenverschlusskappen(config, context) -> List[Dict]:
-    """Two caps per probe, matching the probe diameter."""
-    diameter = str(config.sonden_durchmesser or "").strip()
-    queryset = Sondenverschlusskappe.objects.filter(
-        Q(sonden_durchmesser__iexact=diameter) | Q(name__icontains=diameter)
-    )
-    if not queryset.exists():
-        return []
-
+    """Sondenverschlusskappe (probe closure caps) - selected based on HVB size.
+    Business rules:
+    - Selection: Based on HVB size (NOT probe diameter)
+    - Quantity: 2 pieces for HVB + sondenanzahl * 2 pieces for probes
+    - Total: 2 + (sondenanzahl * 2)
+    - We do not differentiate between HVB and probes - all are called "Sondenverschlusskappe"
+    - For HVB 63mm, use DA 110 (specific business rule)
+    """
     items: List[Dict] = []
+    
+    # Get HVB size (this is what determines which Sondenverschlusskappe to use)
+    hvb_size = str(config.hvb_size or "").strip()
+    if not hvb_size:
+        return items
+    
+    # Remove 'mm' suffix if present
+    if hvb_size.lower().endswith('mm'):
+        hvb_size = hvb_size[:-2].strip()
+    
+    # Business rule: For HVB 63mm, use DA 110 Sondenverschlusskappe
+    # For other HVB sizes, match by HVB size
+    if hvb_size == "63":
+        target_da_size = "110"
+    else:
+        target_da_size = hvb_size
+    
+    # Find Sondenverschlusskappe that matches the target DA size
+    # Match by sonden_durchmesser field (which contains the DA size)
+    queryset = Sondenverschlusskappe.objects.filter(
+        sonden_durchmesser__iexact=target_da_size
+    )
+    
+    if not queryset.exists():
+        return items
+    
+    # Calculate quantity: 2 (for HVB) + sondenanzahl * 2 (for probes)
+    sondenanzahl = context.get('sondenanzahl', 0) if context else 0
+    if not sondenanzahl:
+        sondenanzahl = config.sondenanzahl or 0
+    
+    # Quantity = 2 (HVB) + sondenanzahl * 2 (probes)
+    total_quantity = 2 + (sondenanzahl * 2)
+    
     for cap in queryset:
-        quantity = cap.menge_statisch
-        if cap.menge_formel:
-            quantity = calculate_formula(cap.menge_formel, context)
-        if quantity is None:
-            continue
-        if quantity == 0:
-            continue
         items.append(
             {
                 "artikelnummer": format_artikelnummer(cap.artikelnummer),
                 "artikelbezeichnung": cap.artikelbezeichnung,
-                "menge": _decimal(quantity),
+                "menge": _decimal(total_quantity),
                 "source_table": "Sondenverschlusskappe",
             }
         )
+    
     return items
 
 
@@ -133,22 +161,19 @@ def build_stumpfschweiss_endkappen(config) -> List[Dict]:
 
 
 def build_entlueftung_components(config, context=None) -> List[Dict]:
-    """Entlüftung parts – only specific components are included.
-    According to requirements:
-    - Only include: 2001029, 2000718, 2000852, 2001167 (always included, even if in Kugelhahn/DFM)
-    - Article 2001167 quantity from Entlüftung (4) is additive to quantities from Kugelhahn/DFM
-    - Exclude all others that appear in Kugelhahn or DFM to avoid duplicates.
-    - Kugelhahn articles (2001029, 2000852, 2001167) should be labeled based on which Kugelhahn type they belong to."""
+    """Entlüftung parts – ALL articles from Entlüftung.csv are included.
+    Business rules:
+    - ALL Entlüftung articles are included (they are ventilation/bleeding components)
+    - Articles that also appear in Kugelhahn/DFM are still included (cross-referenced)
+    - Kugelhahn articles (those with "Kugelhahn" in description) should be labeled based on which Kugelhahn type they belong to
+    - Quantity uses menge_statisch from CSV (as per Entlüftung CSV structure)"""
     items: List[Dict] = []
     hvb_size = str(config.hvb_size)
     probe_size = str(config.sonden_durchmesser)
     
-    # Dynamic detection: Include Entlüftung articles that also appear in Kugelhahn or DFM
-    # Business rule: "always included, even if in Kugelhahn/DFM" means these are cross-referenced articles
-    # This makes it dynamic - any article that exists in both Entlüftung and Kugelhahn/DFM will be included
     from ..models import Kugelhahn, DFM
     
-    # Build sets of article numbers from Kugelhahn and DFM (for cross-reference check)
+    # Build sets of article numbers from Kugelhahn and DFM (for cross-reference check and labeling)
     kugelhahn_artikelnummern = set(
         Kugelhahn.objects.exclude(artikelnummer__isnull=True)
         .exclude(artikelnummer='')
@@ -159,23 +184,6 @@ def build_entlueftung_components(config, context=None) -> List[Dict]:
         .exclude(artikelnummer='')
         .values_list('artikelnummer', flat=True)
     )
-    
-    # Also include articles with specific patterns that indicate they should always be included
-    # Pattern 1: "Endkappe" (closure caps) - always included
-    # Pattern 2: Articles that appear in both Entlüftung and Kugelhahn/DFM
-    def should_include_entlueftung_article(part):
-        artikelnummer = format_artikelnummer(part.artikelnummer)
-        beschreibung = (part.artikelbezeichnung or "").lower()
-        
-        # Always include "Endkappe" (closure caps)
-        if "endkappe" in beschreibung:
-            return True
-        
-        # Include if article also exists in Kugelhahn or DFM (cross-referenced)
-        if artikelnummer in kugelhahn_artikelnummern or artikelnummer in dfm_artikelnummern:
-            return True
-        
-        return False
     
     # Kugelhahn articles that should be labeled based on Kugelhahn type
     # Dynamically detect: articles with "Kugelhahn" in description that also exist in Kugelhahn table
@@ -201,17 +209,14 @@ def build_entlueftung_components(config, context=None) -> List[Dict]:
         if dfm_da == "32":
             kugelhahn_source = "D-Kugelhahn"
     
+    # Include ALL Entlüftung articles (they are all ventilation/bleeding components)
     for part in Entlueftung.objects.all():
+        # Check ET-HVB compatibility (if specified)
         compat_value = getattr(part, "et_hvb", "")
         if not _compatibility_match(compat_value, hvb_size, config.sonden_durchmesser):
             continue
         
         artikelnummer = format_artikelnummer(part.artikelnummer)
-        
-        # Dynamic inclusion: Only include articles that match business rules
-        # Rule: Include articles that also appear in Kugelhahn/DFM OR are "Endkappe" type
-        if not should_include_entlueftung_article(part):
-            continue
         
         # Determine source_table: Kugelhahn articles should be labeled based on Kugelhahn type
         # Dynamically detect if this is a Kugelhahn article (appears in Kugelhahn table and has "Kugelhahn" in description)
@@ -220,6 +225,7 @@ def build_entlueftung_components(config, context=None) -> List[Dict]:
         else:
             source_table = "Entlüftung"
             
+        # Use menge_statisch from CSV (as per Entlüftung CSV structure)
         qty = part.menge_statisch or Decimal("1")
         items.append(
             {
@@ -748,8 +754,18 @@ def build_dfm_kugelhahn_components(config, context) -> List[Dict]:
 
 
 def build_hvb_stuetze_components(config) -> List[Dict]:
-    """Build HVB Stütze (support) components - Oben and Unter articles for each HVB diameter"""
+    """Build HVB Stütze (support) components - Oben and Unter articles for each HVB diameter
+    CRITICAL: These "GN X - ZUB - Verteiler - Stütze" articles are ONLY for GN X chambers
+    (GN X1, GN X2, GN X3, GN X4). They must NOT appear for regular GN chambers (GN 1, GN 2, etc.)
+    """
     items: List[Dict] = []
+    
+    # CRITICAL FILTER: Only include for GN X chambers (chambers with "X" in the name)
+    schachttyp = str(config.schachttyp or "").strip()
+    if not schachttyp or "X" not in schachttyp.upper():
+        # Not a GN X chamber - return empty list (no HVB Stütze for regular GN chambers)
+        return items
+    
     hvb_size = str(config.hvb_size).strip()
     
     if not hvb_size:
@@ -760,6 +776,7 @@ def build_hvb_stuetze_components(config) -> List[Dict]:
         hvb_size = hvb_size[:-2].strip()
     
     # Get both Oben and Unter articles for this HVB diameter
+    # Only for GN X chambers (already filtered above)
     stuetze_articles = HVBStuetze.objects.filter(hvb_durchmesser=hvb_size)
     
     for stuetze in stuetze_articles:

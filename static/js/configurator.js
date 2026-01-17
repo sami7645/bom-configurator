@@ -1081,7 +1081,8 @@ function checkGNXChamber() {
     const schachttyp = $('#schachttyp').val();
     
     if (['GN X1', 'GN X2', 'GN X3', 'GN X4'].includes(schachttyp)) {
-        $('#gnxChamberSection').removeClass('d-none');
+        // Don't show section yet - wait for articles to load
+        $('#gnxChamberSection').addClass('d-none');
         loadGNXArticles();
     } else {
         $('#gnxChamberSection').addClass('d-none');
@@ -1104,7 +1105,7 @@ function loadGNXArticles() {
         }),
         contentType: 'application/json',
         success: function(data) {
-            gnxArticles = data.articles;
+            gnxArticles = data.articles || [];
             renderGNXArticles();
         },
         error: function() {
@@ -1114,6 +1115,15 @@ function loadGNXArticles() {
 }
 
 function renderGNXArticles() {
+    // Hide section if no articles
+    if (!gnxArticles || gnxArticles.length === 0) {
+        $('#gnxChamberSection').addClass('d-none');
+        return;
+    }
+    
+    // Show section only if there are articles
+    $('#gnxChamberSection').removeClass('d-none');
+    
     let html = '';
     
     gnxArticles.forEach(function(article, index) {
