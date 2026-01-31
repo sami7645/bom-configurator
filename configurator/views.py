@@ -1,26 +1,42 @@
 def calculate_hvb_length(config):
-    # Calculate HVB length using proper formulas
+    """Calculate HVB length using correct formulas:
+    Einseitig (one-sided): (X-1) * 100 * 2 + Zuschlag 1 + Zuschlag 2
+    Beidseitig (two-sided): (X-1) * 100 + Zuschlag 1 + Zuschlag 2
+    
+    Where:
+    - X = sondenanzahl (number of probes)
+    - 100 = constant (NOT sondenabstand)
+    - Zuschlag 1 = zuschlag_links
+    - Zuschlag 2 = zuschlag_rechts
+    """
     try:
         sondenanzahl = Decimal(config.sondenanzahl)
-        distance = Decimal(config.sondenabstand)
         zuschlag_links = Decimal(config.zuschlag_links or 100)
         zuschlag_rechts = Decimal(config.zuschlag_rechts or 100)
+        anschlussart = str(config.anschlussart or 'einseitig').strip().lower()
     except Exception:
         return None
 
-    if sondenanzahl <= 1 or distance <= 0:
+    if sondenanzahl <= 1:
         return None
 
-    # Use U-form for chambers with multiple probes, I-form for manifolds
-    if config.schachttyp == 'Verteiler' or config.bauform == 'I':
-        # I-form formula: (sondenanzahl - 1) * sondenabstand + zuschläge
-        base = (sondenanzahl - 1) * distance
+    # Constant value: 100 (NOT sondenabstand)
+    constant = Decimal('100')
+    
+    # Calculate base: (X-1) * 100
+    base = (sondenanzahl - 1) * constant
+    
+    # Apply formula based on anschlussart
+    if anschlussart == 'einseitig':
+        # Einseitig: (X-1) * 100 * 2 + Zuschlag 1 + Zuschlag 2
+        total_mm = base * Decimal('2') + zuschlag_links + zuschlag_rechts
+    elif anschlussart == 'beidseitig':
+        # Beidseitig: (X-1) * 100 + Zuschlag 1 + Zuschlag 2
+        total_mm = base + zuschlag_links + zuschlag_rechts
     else:
-        # U-form formula for chambers: (sondenanzahl - 1) * sondenabstand + zuschläge
-        # Note: Both formulas are the same for the base calculation
-        base = (sondenanzahl - 1) * distance
-
-    total_mm = base + zuschlag_links + zuschlag_rechts
+        # Default to einseitig if unknown
+        total_mm = base * Decimal('2') + zuschlag_links + zuschlag_rechts
+    
     if total_mm <= 0:
         return None
     return total_mm / Decimal('1000')
@@ -554,6 +570,41 @@ def check_existing_configuration(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def get_hvb_stuetze_articles(request):
+    """Get HVB Stütze articles (Oben and Unter) based on HVB size"""
+    data = json.loads(request.body)
+    hvb_size = data.get('hvb_size', '').strip()
+    
+    if not hvb_size:
+        return JsonResponse({
+            'articles': []
+        })
+    
+    # Remove 'mm' suffix if present
+    if hvb_size.lower().endswith('mm'):
+        hvb_size = hvb_size[:-2].strip()
+    
+    from .models import HVBStuetze
+    
+    # Get both Oben and Unter articles for this HVB diameter
+    stuetze_articles = HVBStuetze.objects.filter(hvb_durchmesser=hvb_size).order_by('position')
+    
+    articles = []
+    for stuetze in stuetze_articles:
+        articles.append({
+            'artikelnummer': str(stuetze.artikelnummer).replace('.0', '').strip(),
+            'artikelbezeichnung': stuetze.artikelbezeichnung,
+            'position': stuetze.position,
+            'hvb_durchmesser': stuetze.hvb_durchmesser
+        })
+    
+    return JsonResponse({
+        'articles': articles
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def get_gnx_chamber_articles(request):
     """Get GN X chamber articles based on HVB size - only return articles that exist in product data"""
     data = json.loads(request.body)
@@ -728,7 +779,7 @@ def generate_bom(request):
         
         bom_items = []
         
-        # Add Schacht item
+        # Add Schacht item (FINALIZED - correct based on Schachttyp selection)
         schacht = Schacht.objects.filter(schachttyp=config.schachttyp).first()
         if schacht and schacht.artikelnummer:
             quantity = schacht.menge_statisch or Decimal('1')
@@ -746,7 +797,7 @@ def generate_bom(request):
             )
             bom_items.append(bom_item)
         
-        # Add HVB item
+        # Add HVB item (FINALIZED - correct based on HVB-Größe selection)
         hvb = HVB.objects.filter(hauptverteilerbalken=config.hvb_size).first()
         if hvb:
             quantity = hvb.menge_statisch or Decimal('1')
@@ -761,11 +812,8 @@ def generate_bom(request):
                     quantity = calculated_value / Decimal('1000')
                     calculated = calculated_value
             
-            # Format description with length in meters
-            if hvb.menge_formel and calculated is not None:
-                artikelbezeichnung = f"{hvb.artikelbezeichnung} ({calculated:.0f}mm / {quantity:.3f}m)"
-            else:
-                artikelbezeichnung = hvb.artikelbezeichnung
+            # Use plain artikelbezeichnung without dimension information
+            artikelbezeichnung = hvb.artikelbezeichnung
             
             bom_item = BOMItem.objects.create(
                 configuration=config,
@@ -919,7 +967,9 @@ def generate_bom(request):
         
         # Use rule-based builders for all configurations
         additional_components = []
-        additional_components.extend(bom_rules.build_hvb_stuetze_components(config))
+        # Get custom HVB Stuetze quantities from request
+        hvb_stuetze_quantities = data.get('hvb_stuetze_articles', {})
+        additional_components.extend(bom_rules.build_hvb_stuetze_components(config, hvb_stuetze_quantities))
         additional_components.extend(bom_rules.build_kugelhahn_components(config, calc_context))
         additional_components.extend(bom_rules.build_dfm_kugelhahn_components(config, calc_context))
         additional_components.extend(bom_rules.build_plastic_dfm_components(config, calc_context))
@@ -937,12 +987,16 @@ def generate_bom(request):
             
             if key in component_map:
                 component_map[key]['menge'] += component['menge']
+                # Preserve finalized flag if any component is finalized
+                if component.get('is_finalized', False):
+                    component_map[key]['is_finalized'] = True
             else:
                 component_map[key] = {
                     'artikelnummer': component['artikelnummer'],
                     'artikelbezeichnung': component['artikelbezeichnung'],
                     'menge': component['menge'],
-                    'source_table': source
+                    'source_table': source,
+                    'is_finalized': component.get('is_finalized', False)
                 }
 
         for component in component_map.values():
@@ -954,6 +1008,8 @@ def generate_bom(request):
                 source_table=component['source_table']
             )
             bom_items.append(bom_item)
+            # Store is_finalized flag for JSON response (we'll add it to bom_data later)
+            bom_item._is_finalized = component.get('is_finalized', False)
         
         # Prepare response data
         bom_data = []
@@ -961,11 +1017,21 @@ def generate_bom(request):
             # Convert Decimal to float for JSON serialization to avoid any scaling issues
             menge_value = float(item.menge)
             print(f"DEBUG JSON: Article {item.artikelnummer}, Menge in DB: {item.menge}, Float: {menge_value}, Source: {item.source_table}")
+            
+            # Check if item is finalized
+            is_finalized = False
+            if hasattr(item, '_is_finalized'):
+                is_finalized = item._is_finalized
+            elif item.source_table in ['Schacht', 'HVB', 'HVB Stütze']:
+                # Schacht, HVB, and HVB Stütze are finalized (correct based on selections)
+                is_finalized = True
+            
             bom_data.append({
                 'artikelnummer': item.artikelnummer,
                 'artikelbezeichnung': item.artikelbezeichnung,
                 'menge': menge_value,  # Use float instead of string to ensure correct serialization
-                'source': item.source_table
+                'source': item.source_table,
+                'is_finalized': is_finalized
             })
         
         return JsonResponse({

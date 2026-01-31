@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/schachtgrenze-info/', views.get_schachtgrenze_info, name='get_schachtgrenze_info'),
     path('api/dfm-options/', views.get_dfm_options, name='get_dfm_options'),
     path('api/check-configuration/', views.check_existing_configuration, name='check_existing_configuration'),
+    path('api/hvb-stuetze-articles/', views.get_hvb_stuetze_articles, name='get_hvb_stuetze_articles'),
     path('api/gnx-chamber-articles/', views.get_gnx_chamber_articles, name='get_gnx_chamber_articles'),
     path('api/generate-bom/', views.generate_bom, name='generate_bom'),
     path('api/update-probes/', views.update_probes_endpoint, name='update_probes_endpoint'),

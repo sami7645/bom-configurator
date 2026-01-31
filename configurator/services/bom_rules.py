@@ -46,58 +46,80 @@ def _compatibility_match(compat_value: str, hvb_size: str, sonden_durchmesser: s
 
 
 def build_sondenverschlusskappen(config, context) -> List[Dict]:
-    """Sondenverschlusskappe (probe closure caps) - selected based on HVB size.
+    """Sondenverschlusskappe (probe closure caps) - TWO separate items:
+    1. HVB Sondenverschlusskappe: 2 pieces based on HVB size
+    2. Probe Sondenverschlusskappe: sondenanzahl * 2 pieces based on probe diameter
+    
     Business rules:
-    - Selection: Based on HVB size (NOT probe diameter)
-    - Quantity: 2 pieces for HVB + sondenanzahl * 2 pieces for probes
-    - Total: 2 + (sondenanzahl * 2)
-    - We do not differentiate between HVB and probes - all are called "Sondenverschlusskappe"
-    - For HVB 63mm, use DA 110 (specific business rule)
+    - HVB: Always 2 pieces, selected by HVB size (for HVB 63mm, use DA 110)
+    - Probes: sondenanzahl * 2 pieces, selected by probe diameter (sonden_durchmesser)
+    - These are TWO SEPARATE items in the BOM
     """
     items: List[Dict] = []
     
-    # Get HVB size (this is what determines which Sondenverschlusskappe to use)
-    hvb_size = str(config.hvb_size or "").strip()
-    if not hvb_size:
-        return items
-    
-    # Remove 'mm' suffix if present
-    if hvb_size.lower().endswith('mm'):
-        hvb_size = hvb_size[:-2].strip()
-    
-    # Business rule: For HVB 63mm, use DA 110 Sondenverschlusskappe
-    # For other HVB sizes, match by HVB size
-    if hvb_size == "63":
-        target_da_size = "110"
-    else:
-        target_da_size = hvb_size
-    
-    # Find Sondenverschlusskappe that matches the target DA size
-    # Match by sonden_durchmesser field (which contains the DA size)
-    queryset = Sondenverschlusskappe.objects.filter(
-        sonden_durchmesser__iexact=target_da_size
-    )
-    
-    if not queryset.exists():
-        return items
-    
-    # Calculate quantity: 2 (for HVB) + sondenanzahl * 2 (for probes)
     sondenanzahl = context.get('sondenanzahl', 0) if context else 0
     if not sondenanzahl:
         sondenanzahl = config.sondenanzahl or 0
     
-    # Quantity = 2 (HVB) + sondenanzahl * 2 (probes)
-    total_quantity = 2 + (sondenanzahl * 2)
+    # ============================================
+    # 1. HVB Sondenverschlusskappe (always 2 pieces)
+    # ============================================
+    hvb_size = str(config.hvb_size or "").strip()
+    if hvb_size:
+        # Remove 'mm' suffix if present
+        if hvb_size.lower().endswith('mm'):
+            hvb_size = hvb_size[:-2].strip()
+        
+        # Business rule: For HVB 63mm, use DA 110 Sondenverschlusskappe
+        # For other HVB sizes, match by HVB size
+        if hvb_size == "63":
+            target_da_size = "110"
+        else:
+            target_da_size = hvb_size
+        
+        # Find Sondenverschlusskappe that matches the target DA size for HVB
+        hvb_cap = Sondenverschlusskappe.objects.filter(
+            sonden_durchmesser__iexact=target_da_size
+        ).first()
+        
+        if hvb_cap:
+            items.append(
+                {
+                    "artikelnummer": format_artikelnummer(hvb_cap.artikelnummer),
+                    "artikelbezeichnung": f"{hvb_cap.artikelbezeichnung} (HVB)",
+                    "menge": _decimal("2"),  # Always 2 pieces for HVB
+                    "source_table": "Sondenverschlusskappe",
+                    "is_finalized": True,  # Mark as finalized
+                }
+            )
     
-    for cap in queryset:
-        items.append(
-            {
-                "artikelnummer": format_artikelnummer(cap.artikelnummer),
-                "artikelbezeichnung": cap.artikelbezeichnung,
-                "menge": _decimal(total_quantity),
-                "source_table": "Sondenverschlusskappe",
-            }
-        )
+    # ============================================
+    # 2. Probe Sondenverschlusskappe (sondenanzahl * 2 pieces)
+    # ============================================
+    sonden_durchmesser = str(config.sonden_durchmesser or "").strip()
+    if sonden_durchmesser and sondenanzahl > 0:
+        # Remove 'mm' suffix if present
+        if sonden_durchmesser.lower().endswith('mm'):
+            sonden_durchmesser = sonden_durchmesser[:-2].strip()
+        
+        # Find Sondenverschlusskappe that matches the probe diameter
+        probe_cap = Sondenverschlusskappe.objects.filter(
+            sonden_durchmesser__iexact=sonden_durchmesser
+        ).first()
+        
+        if probe_cap:
+            # Quantity = sondenanzahl * 2 (2 pieces per probe)
+            probe_quantity = sondenanzahl * 2
+            
+            items.append(
+                {
+                    "artikelnummer": format_artikelnummer(probe_cap.artikelnummer),
+                    "artikelbezeichnung": f"{probe_cap.artikelbezeichnung} (Sonden)",
+                    "menge": _decimal(str(probe_quantity)),
+                    "source_table": "Sondenverschlusskappe",
+                    "is_finalized": True,  # Mark as finalized
+                }
+            )
     
     return items
 
@@ -753,12 +775,19 @@ def build_dfm_kugelhahn_components(config, context) -> List[Dict]:
     return items
 
 
-def build_hvb_stuetze_components(config) -> List[Dict]:
+def build_hvb_stuetze_components(config, custom_quantities: dict = None) -> List[Dict]:
     """Build HVB Stütze (support) components - Oben and Unter articles for each HVB diameter
     CRITICAL: These "GN X - ZUB - Verteiler - Stütze" articles are ONLY for GN X chambers
     (GN X1, GN X2, GN X3, GN X4). They must NOT appear for regular GN chambers (GN 1, GN 2, etc.)
+    
+    Args:
+        config: BOMConfiguration instance
+        custom_quantities: Dictionary mapping artikelnummer to custom quantity (from Step 2)
     """
     items: List[Dict] = []
+    
+    if custom_quantities is None:
+        custom_quantities = {}
     
     # CRITICAL FILTER: Only include for GN X chambers (chambers with "X" in the name)
     schachttyp = str(config.schachttyp or "").strip()
@@ -780,12 +809,26 @@ def build_hvb_stuetze_components(config) -> List[Dict]:
     stuetze_articles = HVBStuetze.objects.filter(hvb_durchmesser=hvb_size)
     
     for stuetze in stuetze_articles:
+        artikelnummer = format_artikelnummer(stuetze.artikelnummer)
+        artikelnummer_key = str(stuetze.artikelnummer).replace('.0', '').strip()
+        
+        # Use custom quantity if provided, otherwise default to 1
+        quantity = Decimal("1")
+        if artikelnummer_key in custom_quantities:
+            try:
+                quantity = Decimal(str(custom_quantities[artikelnummer_key]))
+                if quantity < 0:
+                    quantity = Decimal("1")
+            except (ValueError, TypeError):
+                quantity = Decimal("1")
+        
         items.append(
             {
-                "artikelnummer": format_artikelnummer(stuetze.artikelnummer),
+                "artikelnummer": artikelnummer,
                 "artikelbezeichnung": stuetze.artikelbezeichnung,
-                "menge": Decimal("1"),  # Always 1 piece for each position
+                "menge": quantity,
                 "source_table": "HVB Stütze",
+                "is_finalized": True,  # Mark as finalized - based on fixed HVB-Größe selection
             }
         )
     

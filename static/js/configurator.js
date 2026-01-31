@@ -3,6 +3,7 @@
 let currentStep = 1;
 let configurationData = {};
 let gnxArticles = [];
+let hvbStuetzeArticles = [];
 
 $(document).ready(function() {
     // Initialize form validation
@@ -33,7 +34,10 @@ $(document).ready(function() {
     if ($('#schachttyp').val()) {
         updateSondenanzahlFromSchachtgrenze();
     }
-    $('#hvbSize').on('change', loadGNXArticles);
+    $('#hvbSize').on('change', function() {
+        loadGNXArticles();
+        loadHVBStuetzeArticles();
+    });
     $('#dfmCategory').on('change', handleDFMCategoryChange);
     $('#dfmType').on('change', function() {
         // When dfmType changes, just ensure D-Kugelhahn section is hidden if needed
@@ -356,6 +360,8 @@ function nextStep(step) {
             console.log('sondenabstandAlt (DOM) exists:', altDropdownDomExists);
             
             updateSondenOptions();
+            // Load HVB Stuetze articles if HVB size is selected
+            loadHVBStuetzeArticles();
             // Sync anschlussartAlt immediately
             $('#anschlussartAlt').val($('#anschlussart').val());
             
@@ -435,6 +441,16 @@ function saveStepData(step) {
             }
         });
     }
+    
+    // Also save HVB Stuetze quantities if we're in step 2
+    if (step === 2 && hvbStuetzeArticles.length > 0) {
+        hvbStuetzeArticles.forEach(function(article) {
+            const quantityInput = $(`#hvb-stuetze-qty-${article.artikelnummer}`);
+            if (quantityInput.length) {
+                configurationData[`hvb_stuetze_${article.artikelnummer}`] = quantityInput.val() || '1';
+            }
+        });
+    }
 }
 
 function previousStep(step) {
@@ -464,6 +480,8 @@ function previousStep(step) {
             console.log('sondenabstandAlt exists:', $('#sondenabstandAlt').length > 0);
             
             updateSondenOptions();
+            // Load HVB Stuetze articles if HVB size is selected
+            loadHVBStuetzeArticles();
             // Sync anschlussartAlt immediately
             $('#anschlussartAlt').val($('#anschlussart').val());
             // If anschlussart is already selected, make sure sondenabstand options are loaded
@@ -1146,6 +1164,78 @@ function renderGNXArticles() {
     $('#gnxArticlesList').html(html);
 }
 
+function loadHVBStuetzeArticles() {
+    const hvbSize = $('#hvbSize').val();
+    
+    if (!hvbSize) {
+        // Clear the list if no HVB size is selected
+        $('#hvbStuetzeArticlesList').html('<p class="text-muted text-center mb-0">Bitte HVB-Größe in Schritt 1 wählen...</p>');
+        hvbStuetzeArticles = [];
+        return;
+    }
+    
+    $.ajax({
+        url: '/api/hvb-stuetze-articles/',
+        method: 'POST',
+        data: JSON.stringify({
+            hvb_size: hvbSize
+        }),
+        contentType: 'application/json',
+        success: function(data) {
+            hvbStuetzeArticles = data.articles || [];
+            renderHVBStuetzeArticles();
+        },
+        error: function() {
+            BOMConfigurator.showAlert('Fehler beim Laden der HVB Stütze Artikel.', 'danger');
+            $('#hvbStuetzeArticlesList').html('<p class="text-danger text-center mb-0">Fehler beim Laden der Artikel.</p>');
+        }
+    });
+}
+
+function renderHVBStuetzeArticles() {
+    const container = $('#hvbStuetzeArticlesList');
+    
+    // Hide section if no articles
+    if (!hvbStuetzeArticles || hvbStuetzeArticles.length === 0) {
+        container.html('<p class="text-muted text-center mb-0">Keine HVB Stütze Artikel für diese HVB-Größe verfügbar.</p>');
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-sm table-bordered mb-0">';
+    html += '<thead><tr><th>Artikelnummer</th><th>Bezeichnung</th><th>Position</th><th>Menge</th></tr></thead>';
+    html += '<tbody>';
+    
+    hvbStuetzeArticles.forEach(function(article) {
+        // Get saved quantity or default to 1
+        const savedQuantity = configurationData[`hvb_stuetze_${article.artikelnummer}`] || '1';
+        html += `
+            <tr>
+                <td><strong>${article.artikelnummer}</strong></td>
+                <td>${article.artikelbezeichnung}</td>
+                <td><span class="badge bg-secondary">${article.position}</span></td>
+                <td>
+                    <input type="number" 
+                           class="form-control form-control-sm" 
+                           style="width: 100px;" 
+                           id="hvb-stuetze-qty-${article.artikelnummer}" 
+                           value="${savedQuantity}" 
+                           min="0" 
+                           step="0.001"
+                           onchange="saveHVBStuetzeQuantity('${article.artikelnummer}', this.value)">
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.html(html);
+}
+
+function saveHVBStuetzeQuantity(artikelnummer, quantity) {
+    // Save quantity to configurationData
+    configurationData[`hvb_stuetze_${artikelnummer}`] = quantity;
+}
+
 function updateLengthDisplays() {
     updateHvbLengthDisplay();
     updateProbeDistanceDisplay();
@@ -1154,11 +1244,9 @@ function updateLengthDisplays() {
 function updateHvbLengthDisplay() {
     const sondenanzahlInput = $('#sondenanzahl').val();
     const sondenanzahl = sondenanzahlInput ? parseFloat(sondenanzahlInput) : 0;
-    const sondenabstandVal = $('#sondenabstand').val();
-    const sondenabstand = sondenabstandVal ? parseFloat(sondenabstandVal) : 0;
-    const zuschlagLinks = parseFloat($('#zuschlagLinks').val()) || 0;
-    const zuschlagRechts = parseFloat($('#zuschlagRechts').val()) || 0;
-    const bauform = $('#bauform').val() || 'I';
+    const zuschlagLinks = parseFloat($('#zuschlagLinks').val()) || 100;
+    const zuschlagRechts = parseFloat($('#zuschlagRechts').val()) || 100;
+    const anschlussart = $('#anschlussart').val() || 'einseitig';
     
     // More lenient validation - allow calculation if we have valid numbers, even if sondenanzahl is 1
     if (!sondenanzahlInput || sondenanzahlInput === '' || isNaN(sondenanzahl) || sondenanzahl < 1) {
@@ -1167,26 +1255,30 @@ function updateHvbLengthDisplay() {
         return;
     }
     
-    if (!sondenabstandVal || sondenabstandVal === '' || isNaN(sondenabstand) || sondenabstand <= 0) {
-        $('#hvbLengthDisplay').text('–');
-        $('#hvbLengthFormula').text('Bitte den Sondenabstand wählen.');
-        return;
-    }
+    // Constant value: 100 (NOT sondenabstand)
+    const constant = 100;
+    
+    // Calculate base: (X-1) * 100
+    const base = (sondenanzahl - 1) * constant;
     
     let totalMm;
     let formula;
     
-    if (bauform === 'U') {
-        // U-Form: (sondenanzahl - 1) × sondenabstand + zuschläge
-        totalMm = (sondenanzahl - 1) * sondenabstand + zuschlagLinks + zuschlagRechts;
-        formula = `U-Form: (${sondenanzahl} - 1) × ${sondenabstand} + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+    if (anschlussart === 'einseitig') {
+        // Einseitig: (X-1) * 100 * 2 + Zuschlag 1 + Zuschlag 2
+        totalMm = base * 2 + zuschlagLinks + zuschlagRechts;
+        formula = `Einseitig: (${sondenanzahl} - 1) × 100 × 2 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+    } else if (anschlussart === 'beidseitig') {
+        // Beidseitig: (X-1) * 100 + Zuschlag 1 + Zuschlag 2
+        totalMm = base + zuschlagLinks + zuschlagRechts;
+        formula = `Beidseitig: (${sondenanzahl} - 1) × 100 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
     } else {
-        // I-Form: (sondenanzahl - 1) × sondenabstand + zuschläge
-        totalMm = (sondenanzahl - 1) * sondenabstand + zuschlagLinks + zuschlagRechts;
-        formula = `I-Form: (${sondenanzahl} - 1) × ${sondenabstand} + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+        // Default to einseitig if unknown
+        totalMm = base * 2 + zuschlagLinks + zuschlagRechts;
+        formula = `Einseitig: (${sondenanzahl} - 1) × 100 × 2 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
     }
     
-    const totalMeters = (totalMm / 1000).toFixed(2);
+    const totalMeters = (totalMm / 1000).toFixed(3);
     $('#hvbLengthDisplay').text(`${totalMm}mm (${totalMeters}m)`);
     $('#hvbLengthFormula').text(formula);
 }
@@ -1428,6 +1520,24 @@ function generateBOM() {
         });
     }
     
+    // Add HVB Stuetze articles with custom quantities
+    if (hvbStuetzeArticles.length > 0) {
+        configurationData.hvb_stuetze_articles = {};
+        hvbStuetzeArticles.forEach(function(article) {
+            const quantityInput = $(`#hvb-stuetze-qty-${article.artikelnummer}`);
+            if (quantityInput.length) {
+                const quantity = quantityInput.val();
+                if (quantity && parseFloat(quantity) > 0) {
+                    configurationData.hvb_stuetze_articles[article.artikelnummer] = parseFloat(quantity);
+                }
+            } else {
+                // Fallback to saved quantity or default 1
+                const savedQuantity = configurationData[`hvb_stuetze_${article.artikelnummer}`] || '1';
+                configurationData.hvb_stuetze_articles[article.artikelnummer] = parseFloat(savedQuantity);
+            }
+        });
+    }
+    
     $.ajax({
         url: '/api/generate-bom/',
         method: 'POST',
@@ -1603,8 +1713,14 @@ function showBOMResult(data) {
         
         const formattedMenge = BOMConfigurator.formatNumber(mengeValue, 3);
         console.log(`DEBUG JS: Formatted: ${formattedMenge}`);
+        
+        // Check if item is finalized (should have green background/border)
+        const isFinalized = item.is_finalized === true;
+        const rowClass = isFinalized ? 'table-success' : '';
+        const rowStyle = isFinalized ? 'background-color: #d1e7dd; border: 2px solid #28a745;' : '';
+        
         html += `
-            <tr>
+            <tr class="${rowClass}" style="${rowStyle}">
                 <td>${index + 1}</td>
                 <td><code>${item.artikelnummer}</code></td>
                 <td>${item.artikelbezeichnung}</td>

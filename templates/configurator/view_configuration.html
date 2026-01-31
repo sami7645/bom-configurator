@@ -209,7 +209,12 @@
                             </thead>
                             <tbody>
                                 {% for item in bom_items %}
+                                {% comment %}Mark finalized items: Schacht, HVB, HVB Stütze, and Sondenverschlusskappe are finalized{% endcomment %}
+                                {% if item.source_table == "Schacht" or item.source_table == "HVB" or item.source_table == "HVB Stütze" or item.source_table == "Sondenverschlusskappe" %}
+                                <tr class="table-success" style="background-color: #d1e7dd; border: 2px solid #28a745;">
+                                {% else %}
                                 <tr>
+                                {% endif %}
                                     <td class="text-center">{{ forloop.counter }}</td>
                                     <td><code>{{ item.artikelnummer }}</code></td>
                                     <td>{{ item.artikelbezeichnung }}</td>
