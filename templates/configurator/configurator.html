@@ -170,6 +170,18 @@
                                 </div>
                             </div>
                             
+                            <!-- Vorlauf / Rücklauf Längen pro Sonde (optional) -->
+                            <div class="row mt-2">
+                                <div class="col-md-6 mb-3">
+                                    <label for="vorlauflengthperprobe" class="form-label">Vorlauf-Länge pro Sonde (m, optional)</label>
+                                    <input type="number" step="0.001" min="0" class="form-control" id="vorlauflengthperprobe" name="vorlauf_length_per_probe" placeholder="z.B. 0.245">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="ruecklauflengthperprobe" class="form-label">Rücklauf-Länge pro Sonde (m, optional)</label>
+                                    <input type="number" step="0.001" min="0" class="form-control" id="ruecklauflengthperprobe" name="ruecklauf_length_per_probe" placeholder="z.B. 0.145">
+                                </div>
+                            </div>
+                            
                             <!-- HVB Längenberechnung (Blaue Sektion) -->
                             <div class="row mt-4">
                                 <div class="col-12 mb-3">
@@ -182,44 +194,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Sondenabstände / Alternative Berechnung (Grüne Sektion) -->
-                            <div class="row mt-3">
-                                <div class="col-12">
-                                    <div class="card border-light shadow-sm">
-                                        <div class="card-header">
-                                            <h6 class="mb-0" style="color: white;"><i class="fas fa-calculator me-2"></i>Sondenabstände</h6>
-                                            <small style="color: rgba(255, 255, 255, 0.9) !important;">Konfigurieren Sie den Abstand zwischen den Sonden. Dies bietet eine alternative HVB-Längenberechnung.</small>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row mb-3">
-                                                <div class="col-md-6">
-                                                    <label for="sondenabstandAlt" class="form-label">Sondenabstand</label>
-                                                    <select class="form-select" id="sondenabstandAlt" name="sondenabstand_alt">
-                                                        <option value="">Bitte wählen...</option>
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <label for="anschlussartAlt" class="form-label">Anschlussart</label>
-                                                    <select class="form-select" id="anschlussartAlt" name="anschlussart_alt">
-                                                        <option value="">Bitte wählen...</option>
-                                                        <option value="einseitig">Einseitig</option>
-                                                        <option value="beidseitig">Beidseitig</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white;">
-                                                <div class="card-body text-center py-4">
-                                                    <h2 class="mb-2" id="probeDistanceDisplay" style="font-size: 2.5rem; font-weight: bold; color: white;">–</h2>
-                                                    <p class="mb-1" style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.95);">Sondenabstand-Berechnung</p>
-                                                    <p class="mb-0" style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.9);" id="probeDistanceFormula">Bitte Anschlussart, Sondenanzahl und Abstand wählen...</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
+
                             <!-- Informational Note (U-Form) -->
                             <div class="row mt-3">
                                 <div class="col-12">
@@ -231,12 +206,12 @@
                             </div>
                             
                             <!-- HVB Stütze Articles Section -->
-                            <div class="row mt-4">
+                            <div class="row mt-4 d-none" id="hvbStuetzeSection">
                                 <div class="col-12">
                                     <div class="card border-light shadow-sm">
                                         <div class="card-header">
                                             <h6 class="mb-0"><i class="fas fa-cube me-2"></i>HVB Stütze</h6>
-                                            <small class="text-muted">Artikel für die gewählte HVB-Größe. Sie können die Mengen anpassen.</small>
+                                            <small style="color: rgba(255, 255, 255, 0.9) !important;">Artikel für die gewählte HVB-Größe. Sie können die Mengen anpassen.</small>
                                         </div>
                                         <div class="card-body">
                                             <div id="hvbStuetzeArticlesList">

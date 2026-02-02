@@ -861,12 +861,29 @@ def generate_bom(request):
             vorlauf_qty = best_match.vorlauf_laenge or Decimal('0')
             ruecklauf_qty = best_match.ruecklauf_laenge or Decimal('0')
             
-            if best_match.vorlauf_formel:
+            # Optional overrides from UI (per-probe lengths in meters)
+            user_vorlauf = data.get('vorlauf_length_per_probe')
+            user_ruecklauf = data.get('ruecklauf_length_per_probe')
+            
+            if user_vorlauf not in (None, '', 'null'):
+                try:
+                    vorlauf_qty = Decimal(str(user_vorlauf))
+                except Exception:
+                    pass
+            
+            if user_ruecklauf not in (None, '', 'null'):
+                try:
+                    ruecklauf_qty = Decimal(str(user_ruecklauf))
+                except Exception:
+                    pass
+            
+            # If no UI override, still allow CSV formulas
+            if best_match.vorlauf_formel and (user_vorlauf in (None, '', 'null')):
                 calculated = calculate_formula(best_match.vorlauf_formel, calc_context)
                 if calculated is not None:
                     vorlauf_qty = calculated
             
-            if best_match.ruecklauf_formel:
+            if best_match.ruecklauf_formel and (user_ruecklauf in (None, '', 'null')):
                 calculated = calculate_formula(best_match.ruecklauf_formel, calc_context)
                 if calculated is not None:
                     ruecklauf_qty = calculated

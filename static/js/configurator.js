@@ -5,6 +5,10 @@ let configurationData = {};
 let gnxArticles = [];
 let hvbStuetzeArticles = [];
 
+function isGNXSchachttyp(schachttyp) {
+    return ['GN X1', 'GN X2', 'GN X3', 'GN X4'].includes(schachttyp);
+}
+
 $(document).ready(function() {
     // Initialize form validation
     initializeValidation();
@@ -27,6 +31,8 @@ $(document).ready(function() {
         updateHvbOptions();
         checkGNXChamber();
         updateSondenanzahlFromSchachtgrenze();
+        // Update HVB Stütze visibility based on Schachttyp
+        loadHVBStuetzeArticles();
         // Don't update Sonden Durchmesser here - it will be loaded when entering step 2
     });
     
@@ -195,6 +201,8 @@ const fieldLabels = {
     'bauform': 'Bauform',
     'zuschlag_links': 'Zuschlag Links',
     'zuschlag_rechts': 'Zuschlag Rechts',
+    'vorlauf_length_per_probe': 'Vorlauf-Länge pro Sonde',
+    'ruecklauf_length_per_probe': 'Rücklauf-Länge pro Sonde',
     'kugelhahn_type': 'Kugelhahn-Typ',
     'dfm_category': 'DFM-Kategorie',
     'dfm_type': 'DFM-Typ',
@@ -204,7 +212,7 @@ const fieldLabels = {
 // Step field mapping - which fields belong to which step
 const stepFields = {
     1: ['configuration_name', 'schachttyp', 'hvb_size'],
-    2: ['anschlussart', 'sonden_durchmesser', 'sondenanzahl', 'sondenabstand', 'bauform', 'zuschlag_links', 'zuschlag_rechts'],
+    2: ['anschlussart', 'sonden_durchmesser', 'sondenanzahl', 'sondenabstand', 'bauform', 'zuschlag_links', 'zuschlag_rechts', 'vorlauf_length_per_probe', 'ruecklauf_length_per_probe'],
     3: ['kugelhahn_type', 'dfm_category', 'dfm_type', 'dfm_kugelhahn_type']
 };
 
@@ -218,6 +226,8 @@ function formatFieldValue(fieldName, value) {
     if (fieldName === 'bauform') return value === 'U' ? 'U-Form' : 'I-Form';
     if (fieldName === 'anschlussart') return value === 'einseitig' ? 'Einseitig' : 'Beidseitig';
     if (fieldName === 'dfm_category') return value === 'plastic' ? 'Kunststoff' : value === 'brass' ? 'Messing' : value;
+    if (fieldName === 'vorlauf_length_per_probe') return `${value} m`;
+    if (fieldName === 'ruecklauf_length_per_probe') return `${value} m`;
     
     return value;
 }
@@ -234,6 +244,8 @@ const fieldIdMap = {
     'bauform': 'bauform',
     'zuschlag_links': 'zuschlagLinks',
     'zuschlag_rechts': 'zuschlagRechts',
+    'vorlauf_length_per_probe': 'vorlauflengthperprobe',
+    'ruecklauf_length_per_probe': 'ruecklauflengthperprobe',
     'kugelhahn_type': 'kugelhahnType',
     'dfm_category': 'dfmCategory',
     'dfm_type': 'dfmType',
@@ -360,7 +372,6 @@ function nextStep(step) {
             console.log('sondenabstandAlt (DOM) exists:', altDropdownDomExists);
             
             updateSondenOptions();
-            // Load HVB Stuetze articles if HVB size is selected
             loadHVBStuetzeArticles();
             // Sync anschlussartAlt immediately
             $('#anschlussartAlt').val($('#anschlussart').val());
@@ -1165,7 +1176,19 @@ function renderGNXArticles() {
 }
 
 function loadHVBStuetzeArticles() {
+    const schachttyp = $('#schachttyp').val();
     const hvbSize = $('#hvbSize').val();
+    
+    // Only relevant for GN X chambers
+    if (!isGNXSchachttyp(schachttyp)) {
+        hvbStuetzeArticles = [];
+        $('#hvbStuetzeArticlesList').html('');
+        $('#hvbStuetzeSection').addClass('d-none');
+        return;
+    }
+    
+    // Show section for GN X chambers
+    $('#hvbStuetzeSection').removeClass('d-none');
     
     if (!hvbSize) {
         // Clear the list if no HVB size is selected
@@ -1201,26 +1224,26 @@ function renderHVBStuetzeArticles() {
         return;
     }
     
-    let html = '<div class="table-responsive"><table class="table table-sm table-bordered mb-0">';
-    html += '<thead><tr><th>Artikelnummer</th><th>Bezeichnung</th><th>Position</th><th>Menge</th></tr></thead>';
+    let html = '<div class="table-responsive"><table class="table table-sm table-bordered mb-0 text-center align-middle">';
+    html += '<thead><tr><th class="text-center align-middle">Artikelnummer</th><th class="text-center align-middle">Bezeichnung</th><th class="text-center align-middle">Position</th><th class="text-center align-middle">Menge</th></tr></thead>';
     html += '<tbody>';
     
     hvbStuetzeArticles.forEach(function(article) {
         // Get saved quantity or default to 1
         const savedQuantity = configurationData[`hvb_stuetze_${article.artikelnummer}`] || '1';
         html += `
-            <tr>
-                <td><strong>${article.artikelnummer}</strong></td>
-                <td>${article.artikelbezeichnung}</td>
-                <td><span class="badge bg-secondary">${article.position}</span></td>
-                <td>
+            <tr class="align-middle">
+                <td class="text-center align-middle"><strong>${article.artikelnummer}</strong></td>
+                <td class="align-middle">${article.artikelbezeichnung}</td>
+                <td class="text-center align-middle"><span class="badge bg-secondary">${article.position}</span></td>
+                <td class="text-center align-middle">
                     <input type="number" 
-                           class="form-control form-control-sm" 
+                           class="form-control form-control-sm text-center mx-auto" 
                            style="width: 100px;" 
                            id="hvb-stuetze-qty-${article.artikelnummer}" 
                            value="${savedQuantity}" 
                            min="0" 
-                           step="0.001"
+                           step="1"
                            onchange="saveHVBStuetzeQuantity('${article.artikelnummer}', this.value)">
                 </td>
             </tr>
