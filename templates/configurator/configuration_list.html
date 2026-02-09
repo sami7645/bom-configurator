@@ -3,6 +3,200 @@
 
 {% block title %}Konfigurationen - BOM Konfigurator{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Modern Checkbox Styling */
+.config-checkbox-wrapper {
+    position: relative;
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+}
+
+.config-checkbox-wrapper input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    z-index: 1;
+}
+
+.config-checkbox-wrapper .custom-checkbox {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    background-color: #fff;
+    border: 2px solid #6c757d;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.config-checkbox-wrapper:hover .custom-checkbox {
+    border-color: #3498db;
+    background-color: #f8f9fa;
+}
+
+.config-checkbox-wrapper input[type="checkbox"]:checked ~ .custom-checkbox {
+    background-color: #3498db;
+    border-color: #3498db;
+}
+
+.config-checkbox-wrapper input[type="checkbox"]:checked ~ .custom-checkbox::after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 3px;
+    width: 6px;
+    height: 12px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.config-checkbox-wrapper input[type="checkbox"]:focus ~ .custom-checkbox {
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.25);
+}
+
+/* Select All Checkbox - Larger */
+#selectAll-wrapper {
+    position: relative;
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+}
+
+#selectAll-wrapper input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    z-index: 1;
+}
+
+#selectAll-wrapper .custom-checkbox {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 28px;
+    height: 28px;
+    background-color: #fff;
+    border: 2px solid #495057;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+#selectAll-wrapper:hover .custom-checkbox {
+    border-color: #3498db;
+    background-color: #f8f9fa;
+    transform: scale(1.05);
+}
+
+#selectAll-wrapper input[type="checkbox"]:checked ~ .custom-checkbox {
+    background-color: #3498db;
+    border-color: #3498db;
+}
+
+#selectAll-wrapper input[type="checkbox"]:checked ~ .custom-checkbox::after {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 4px;
+    width: 7px;
+    height: 14px;
+    border: solid white;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+
+#selectAll-wrapper input[type="checkbox"]:focus ~ .custom-checkbox {
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.25);
+}
+
+/* Improved Delete Button */
+#deleteSelectedBtn {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    border: none;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(231, 76, 60, 0.3);
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+#deleteSelectedBtn:hover {
+    background: linear-gradient(135deg, #c0392b, #a93226);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(231, 76, 60, 0.4);
+}
+
+#deleteSelectedBtn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(231, 76, 60, 0.3);
+}
+
+#deleteSelectedBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+#deleteSelectedBtn i {
+    font-size: 1rem;
+}
+
+#selectedCount {
+    background-color: rgba(255, 255, 255, 0.3);
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 700;
+    margin-left: 0.25rem;
+}
+
+/* Table checkbox column styling */
+th:first-child,
+td:first-child {
+    text-align: center;
+    vertical-align: middle;
+    padding: 1rem 0.75rem !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .config-checkbox-wrapper,
+    #selectAll-wrapper {
+        width: 22px;
+        height: 22px;
+    }
+    
+    .config-checkbox-wrapper .custom-checkbox,
+    #selectAll-wrapper .custom-checkbox {
+        width: 22px;
+        height: 22px;
+    }
+    
+    #deleteSelectedBtn {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.85rem;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
     <!-- Header -->
@@ -23,14 +217,27 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5><i class="fas fa-table me-2"></i>Alle Konfigurationen ({{ configurations.count }})</h5>
+                    <div>
+                        <button type="button" class="btn" id="deleteSelectedBtn" style="display: none;" onclick="deleteSelectedConfigurations()">
+                            <i class="fas fa-trash"></i>
+                            Ausgewählte löschen
+                            <span id="selectedCount">0</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
                             <thead class="table-dark">
                                 <tr>
+                                    <th style="width: 60px;">
+                                        <div id="selectAll-wrapper" title="Alle auswählen">
+                                            <input type="checkbox" id="selectAll">
+                                            <span class="custom-checkbox"></span>
+                                        </div>
+                                    </th>
                                     <th>Name</th>
                                     <th>Schachttyp</th>
                                     <th>HVB-Größe</th>
@@ -43,7 +250,13 @@
                             </thead>
                             <tbody>
                                 {% for config in configurations %}
-                                <tr>
+                                <tr data-config-id="{{ config.id }}">
+                                    <td class="text-center">
+                                        <div class="config-checkbox-wrapper">
+                                            <input type="checkbox" class="config-checkbox" value="{{ config.id }}" id="config-checkbox-{{ config.id }}">
+                                            <span class="custom-checkbox"></span>
+                                        </div>
+                                    </td>
                                     <td>
                                         <strong>{{ config.name }}</strong>
                                         {% if config.kugelhahn_type or config.dfm_type %}
@@ -202,4 +415,158 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Wait for DOM to be ready
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    
+    // Only add event listeners if checkboxes exist (i.e., there are configurations)
+    if (selectAllCheckbox) {
+        // Select All functionality
+        selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.config-checkbox');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+            updateDeleteButton();
+        });
+    }
+    
+    // Add click handlers to custom checkbox spans for better UX
+    document.querySelectorAll('.config-checkbox-wrapper').forEach(wrapper => {
+        const customCheckbox = wrapper.querySelector('.custom-checkbox');
+        const actualCheckbox = wrapper.querySelector('.config-checkbox');
+        if (customCheckbox && actualCheckbox) {
+            customCheckbox.addEventListener('click', function(e) {
+                e.preventDefault();
+                actualCheckbox.checked = !actualCheckbox.checked;
+                actualCheckbox.dispatchEvent(new Event('change'));
+            });
+        }
+    });
+    
+    // Same for select all
+    const selectAllWrapper = document.getElementById('selectAll-wrapper');
+    if (selectAllWrapper) {
+        const customCheckbox = selectAllWrapper.querySelector('.custom-checkbox');
+        const actualCheckbox = selectAllWrapper.querySelector('#selectAll');
+        if (customCheckbox && actualCheckbox) {
+            customCheckbox.addEventListener('click', function(e) {
+                e.preventDefault();
+                actualCheckbox.checked = !actualCheckbox.checked;
+                actualCheckbox.dispatchEvent(new Event('change'));
+            });
+        }
+    }
+});
+
+// Individual checkbox change
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('config-checkbox')) {
+        updateSelectAllState();
+        updateDeleteButton();
+    }
+});
+
+function updateSelectAllState() {
+    const checkboxes = document.querySelectorAll('.config-checkbox');
+    const checked = document.querySelectorAll('.config-checkbox:checked');
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) {
+        selectAll.checked = checkboxes.length > 0 && checked.length === checkboxes.length;
+    }
+}
+
+function updateDeleteButton() {
+    const checked = document.querySelectorAll('.config-checkbox:checked');
+    const deleteBtn = document.getElementById('deleteSelectedBtn');
+    const countSpan = document.getElementById('selectedCount');
+    
+    if (checked.length > 0 && deleteBtn && countSpan) {
+        deleteBtn.style.display = 'inline-block';
+        countSpan.textContent = checked.length;
+    } else if (deleteBtn) {
+        deleteBtn.style.display = 'none';
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function deleteSelectedConfigurations() {
+    const checked = document.querySelectorAll('.config-checkbox:checked');
+    const configIds = Array.from(checked).map(cb => parseInt(cb.value));
+    
+    if (configIds.length === 0) {
+        alert('Bitte wählen Sie mindestens eine Konfiguration aus.');
+        return;
+    }
+    
+    if (!confirm(`Möchten Sie wirklich ${configIds.length} Konfiguration(en) löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+        return;
+    }
+    
+    // Show loading state
+    const deleteBtn = document.getElementById('deleteSelectedBtn');
+    const originalHtml = deleteBtn.innerHTML;
+    deleteBtn.disabled = true;
+    deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Lösche...';
+    
+    // Send delete request
+    fetch('/api/delete-configurations/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            config_ids: configIds
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Remove deleted rows from table
+            configIds.forEach(id => {
+                const row = document.querySelector(`tr[data-config-id="${id}"]`);
+                if (row) row.remove();
+            });
+            
+            // Reset checkboxes
+            const selectAll = document.getElementById('selectAll');
+            if (selectAll) selectAll.checked = false;
+            updateDeleteButton();
+            
+            // Show success message
+            alert(`Erfolgreich ${data.deleted_count} Konfiguration(en) gelöscht.`);
+            
+            // Reload page to refresh count and list
+            location.reload();
+        } else {
+            alert('Fehler beim Löschen: ' + (data.error || 'Unbekannter Fehler'));
+            deleteBtn.disabled = false;
+            deleteBtn.innerHTML = originalHtml;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Fehler beim Löschen der Konfigurationen. Bitte versuchen Sie es erneut.');
+        deleteBtn.disabled = false;
+        deleteBtn.innerHTML = originalHtml;
+    });
+}
+</script>
 {% endblock %}

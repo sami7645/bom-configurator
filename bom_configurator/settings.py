@@ -123,7 +123,8 @@ STATICFILES_DIRS = [
 STATIC_ROOT = str(BASE_DIR / "staticfiles")
 
 # CSV Files Configuration
-CSV_FILES_DIR = BASE_DIR / "excel_sheets_extracted"
+# NOTE: All CSVs are now loaded from the `excel_files` directory
+CSV_FILES_DIR = BASE_DIR / "excel_files"
 
 # Language and Localization
 LANGUAGE_CODE = "de-de"

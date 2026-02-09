@@ -211,9 +211,9 @@
                                 {% for item in bom_items %}
                                 {% comment %}Mark finalized items: Schacht, HVB, HVB Stütze, and Sondenverschlusskappe are finalized{% endcomment %}
                                 {% if item.source_table == "Schacht" or item.source_table == "HVB" or item.source_table == "HVB Stütze" or item.source_table == "Sondenverschlusskappe" %}
-                                <tr class="table-success" style="background-color: #d1e7dd; border: 2px solid #28a745;">
+                                <tr class="table-success bom-item-row" style="background-color: #d1e7dd; border: 2px solid #28a745;">
                                 {% else %}
-                                <tr>
+                                <tr class="bom-item-row">
                                 {% endif %}
                                     <td class="text-center">{{ forloop.counter }}</td>
                                     <td><code>{{ item.artikelnummer }}</code></td>
@@ -283,33 +283,51 @@
 {% block extra_js %}
 <script>
 function exportBOM() {
-    // Simple CSV export functionality
+    // CSV export: Artikelnummer, Menge, Artikelbeschreibung (semicolon, comma decimal, 3 decimals)
     const table = document.querySelector('.bom-table table');
     let csv = [];
     
-    // Headers
-    const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+    const headers = ['Artikelnummer', 'Menge', 'Artikelbeschreibung'];
     csv.push(headers.join(';'));
     
-    // Rows
+    // Table columns: [Pos. (0), Artikelnummer (1), Artikelbezeichnung (2), Menge (3), Quelle (4)]
     const rows = table.querySelectorAll('tbody tr');
     rows.forEach(row => {
-        const cells = Array.from(row.querySelectorAll('td')).map(td => {
-            // Clean up cell content
-            let text = td.textContent.trim();
-            // Remove line breaks and extra spaces
-            text = text.replace(/\s+/g, ' ');
-            return `"${text}"`;
-        });
-        csv.push(cells.join(';'));
+        const cells = Array.from(row.querySelectorAll('td'));
+        let artikelnummer = '';
+        let menge = '';
+        let artikelbezeichnung = '';
+        
+        if (cells.length > 1) {
+            artikelnummer = (cells[1].textContent || '').trim().replace(/<[^>]*>/g, '');
+        }
+        if (cells.length > 2) {
+            artikelbezeichnung = (cells[2].textContent || '').trim();
+        }
+        if (cells.length > 3) {
+            menge = (cells[3].textContent || '').trim().split('\n')[0].trim().replace(/<[^>]*>/g, '');
+            let mengeNumber = parseFloat(menge.replace(/,/g, '.').replace(/\s/g, '').replace(/[^\d.-]/g, ''));
+            if (!isNaN(mengeNumber)) {
+                menge = mengeNumber.toFixed(3).replace(/\./g, ',');
+            } else {
+                const numMatch = menge.match(/[\d,.-]+/);
+                if (numMatch) {
+                    mengeNumber = parseFloat(numMatch[0].replace(/,/g, '.'));
+                    menge = !isNaN(mengeNumber) ? mengeNumber.toFixed(3).replace(/\./g, ',') : menge.replace(/\./g, ',');
+                } else {
+                    menge = '0,000';
+                }
+            }
+        }
+        artikelnummer = artikelnummer.replace(/\s+/g, ' ').trim();
+        artikelbezeichnung = artikelbezeichnung.replace(/\s+/g, ' ').trim();
+        csv.push([`"${artikelnummer}"`, `"${menge}"`, `"${artikelbezeichnung}"`].join(';'));
     });
     
-    // Download
     const csvContent = csv.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
+    link.setAttribute('href', URL.createObjectURL(blob));
     link.setAttribute('download', `BOM_{{ configuration.name|slugify }}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);

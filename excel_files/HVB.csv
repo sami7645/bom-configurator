@@ -1,0 +1,15 @@
+Hauptverteilerbalken,Artikelnummer,Artikelbezeichnung,Menge Statisch,Menge Formel
+63,2000491,Rohr - PE 100-RC - 63,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+75,2000492,Rohr - PE 100-RC - 75,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+90,2000493,Rohr - PE 100-RC - 90,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+110,2000479,Rohr - PE 100-RC - 110,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+125,2000480,Rohr - PE 100-RC - 125,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+140,2000481,Rohr - PE 100-RC - 140,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+160,2000482,Rohr - PE 100-RC - 160,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+180,2000483,Rohr - PE 100-RC - 180,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+200,2000484,Rohr - PE 100-RC - 200,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+225,2000485,Rohr - PE 100-RC - 225,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+250,2000487,Rohr - PE 100-RC - 250,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+280,2001299,Rohr - PE 100-RC - 280,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+315,2001585,Rohr - PE 100-RC - 315,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts
+355,2001600,Rohr - PE 100-RC - 355,,=(sondenanzahl-1) * sondenabstand * 2 + zuschlag_links + zuschlag_rechts

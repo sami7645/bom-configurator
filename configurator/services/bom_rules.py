@@ -426,6 +426,15 @@ def build_kugelhahn_components(config, context) -> List[Dict]:
         is_einlegeteil = "Einlegeteil" in artikelbezeichnung and "ohne Einlegeteil" not in artikelbezeichnung
         
         if is_einlegeteil:
+            # IMPORTANT: Einlegeteil articles must still respect compatibility rules.
+            # Enforce the same ET-HVB / ET-Sonden / KH-HVB checks as for other Kugelhahn items
+            if entry.et_hvb and not check_compatibility(entry.et_hvb, hvb_size, probe_size, "hvb"):
+                continue
+            if entry.et_sonden and not check_compatibility(entry.et_sonden, hvb_size, probe_size, "sonden"):
+                continue
+            if entry.kh_hvb and not check_compatibility(entry.kh_hvb, hvb_size, probe_size, "hvb"):
+                continue
+            
             # Check if formula already contains *2 (like line 2001167)
             has_multiply_2 = entry.menge_formel and "*2" in entry.menge_formel
             
@@ -639,6 +648,15 @@ def build_dfm_kugelhahn_components(config, context) -> List[Dict]:
         is_einlegeteil = "Einlegeteil" in artikelbezeichnung and "ohne Einlegeteil" not in artikelbezeichnung
         
         if is_einlegeteil:
+            # IMPORTANT: Einlegeteil articles in the D-Kugelhahn context must also respect
+            # HVB compatibility (and KH-HVB if present), same as other D-Kugelhahn items.
+            if entry.et_hvb and not check_compatibility(entry.et_hvb, hvb_size, probe_size, "hvb"):
+                print(f"DEBUG: D-Kugelhahn Einlegeteil {entry.artikelnummer} filtered out by et_hvb compatibility")
+                continue
+            if entry.kh_hvb and not check_compatibility(entry.kh_hvb, hvb_size, probe_size, "hvb"):
+                print(f"DEBUG: D-Kugelhahn Einlegeteil {entry.artikelnummer} filtered out by kh_hvb compatibility")
+                continue
+            
             # Check if formula already contains *2 (like line 2001167)
             has_multiply_2 = entry.menge_formel and "*2" in entry.menge_formel
             

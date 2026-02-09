@@ -373,6 +373,8 @@ function nextStep(step) {
             
             updateSondenOptions();
             loadHVBStuetzeArticles();
+            // Auto-fill probe lengths from DB
+            loadProbeLengths();
             // Sync anschlussartAlt immediately
             $('#anschlussartAlt').val($('#anschlussart').val());
             
@@ -493,6 +495,8 @@ function previousStep(step) {
             updateSondenOptions();
             // Load HVB Stuetze articles if HVB size is selected
             loadHVBStuetzeArticles();
+            // Auto-fill probe lengths from DB
+            loadProbeLengths();
             // Sync anschlussartAlt immediately
             $('#anschlussartAlt').val($('#anschlussart').val());
             // If anschlussart is already selected, make sure sondenabstand options are loaded
@@ -1259,6 +1263,88 @@ function saveHVBStuetzeQuantity(artikelnummer, quantity) {
     configurationData[`hvb_stuetze_${artikelnummer}`] = quantity;
 }
 
+// ---- Pre-configured probe lengths (auto-fill from DB) ----
+// Tracks whether the user has manually touched the Vorlauf/Rücklauf fields.
+// Once the user types something, we stop overwriting their value.
+let _probeLengthManualVorlauf = false;
+let _probeLengthManualRuecklauf = false;
+
+$(document).ready(function() {
+    // Mark fields as manually edited when the user types in them
+    $('#vorlauflengthperprobe').on('input', function() {
+        if ($(this).val() !== '') {
+            _probeLengthManualVorlauf = true;
+        } else {
+            _probeLengthManualVorlauf = false;
+        }
+    });
+    $('#ruecklauflengthperprobe').on('input', function() {
+        if ($(this).val() !== '') {
+            _probeLengthManualRuecklauf = true;
+        } else {
+            _probeLengthManualRuecklauf = false;
+        }
+    });
+
+    // Re-fetch probe lengths when any of these inputs change (they all live in step 2)
+    $('#sondenanzahl, #bauform').on('change', function() {
+        loadProbeLengths();
+    });
+});
+
+function loadProbeLengths() {
+    const schachttyp = $('#schachttyp').val() || configurationData['schachttyp'] || '';
+    const hvbSize = $('#hvbSize').val() || configurationData['hvb_size'] || '';
+    const bauform = $('#bauform').val() || '';
+    const sondenanzahl = $('#sondenanzahl').val() || '';
+
+    if (!schachttyp || !hvbSize || !sondenanzahl) {
+        return; // Not enough data yet
+    }
+
+    $.ajax({
+        url: '/api/probe-lengths/',
+        method: 'POST',
+        data: JSON.stringify({
+            schachttyp: schachttyp,
+            hvb_size: hvbSize,
+            bauform: bauform,
+            sondenanzahl: sondenanzahl
+        }),
+        contentType: 'application/json',
+        success: function(data) {
+            if (!data.found) {
+                console.log('No pre-configured probe lengths found for this combination.');
+                // Clear placeholders to show defaults
+                $('#vorlauflengthperprobe').attr('placeholder', 'z.B. 0.245');
+                $('#ruecklauflengthperprobe').attr('placeholder', 'z.B. 0.145');
+                return;
+            }
+
+            console.log('Pre-configured probe lengths:', data);
+
+            // Update placeholders to show the DB value so user knows what will be used
+            if (data.vorlauf_laenge) {
+                $('#vorlauflengthperprobe').attr('placeholder', `DB: ${data.vorlauf_laenge} m`);
+            }
+            if (data.ruecklauf_laenge) {
+                $('#ruecklauflengthperprobe').attr('placeholder', `DB: ${data.ruecklauf_laenge} m`);
+            }
+
+            // Auto-fill ONLY if the user has NOT manually entered a value
+            if (!_probeLengthManualVorlauf && data.vorlauf_laenge) {
+                $('#vorlauflengthperprobe').val(data.vorlauf_laenge);
+            }
+            if (!_probeLengthManualRuecklauf && data.ruecklauf_laenge) {
+                $('#ruecklauflengthperprobe').val(data.ruecklauf_laenge);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading probe lengths:', error);
+        }
+    });
+}
+
 function updateLengthDisplays() {
     updateHvbLengthDisplay();
     updateProbeDistanceDisplay();
@@ -1281,24 +1367,25 @@ function updateHvbLengthDisplay() {
     // Constant value: 100 (NOT sondenabstand)
     const constant = 100;
     
-    // Calculate base: (X-1) * 100
-    const base = (sondenanzahl - 1) * constant;
-    
     let totalMm;
     let formula;
     
     if (anschlussart === 'einseitig') {
-        // Einseitig: (X-1) * 100 * 2 + Zuschlag 1 + Zuschlag 2
-        totalMm = base * 2 + zuschlagLinks + zuschlagRechts;
-        formula = `Einseitig: (${sondenanzahl} - 1) × 100 × 2 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+        // Einseitig: ((X-1) * 100 + Zuschlag 1 + Zuschlag 2) * 2
+        const base = (sondenanzahl - 1) * constant;
+        totalMm = (base + zuschlagLinks + zuschlagRechts) * 2;
+        formula = `Einseitig: ((${sondenanzahl} - 1) × 100 + ${zuschlagLinks} + ${zuschlagRechts}) × 2 = ${totalMm}mm`;
     } else if (anschlussart === 'beidseitig') {
-        // Beidseitig: (X-1) * 100 + Zuschlag 1 + Zuschlag 2
-        totalMm = base + zuschlagLinks + zuschlagRechts;
-        formula = `Beidseitig: (${sondenanzahl} - 1) × 100 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+        // Beidseitig: ((X/2 - 1) * 100 + Zuschlag 1 + Zuschlag 2) * 2
+        const halfProbes = sondenanzahl / 2;
+        const base = (halfProbes - 1) * constant;
+        totalMm = (base + zuschlagLinks + zuschlagRechts) * 2;
+        formula = `Beidseitig: ((${sondenanzahl} / 2 - 1) × 100 + ${zuschlagLinks} + ${zuschlagRechts}) × 2 = ${totalMm}mm`;
     } else {
         // Default to einseitig if unknown
-        totalMm = base * 2 + zuschlagLinks + zuschlagRechts;
-        formula = `Einseitig: (${sondenanzahl} - 1) × 100 × 2 + ${zuschlagLinks} + ${zuschlagRechts} = ${totalMm}mm`;
+        const base = (sondenanzahl - 1) * constant;
+        totalMm = (base + zuschlagLinks + zuschlagRechts) * 2;
+        formula = `Einseitig: ((${sondenanzahl} - 1) × 100 + ${zuschlagLinks} + ${zuschlagRechts}) × 2 = ${totalMm}mm`;
     }
     
     const totalMeters = (totalMm / 1000).toFixed(3);

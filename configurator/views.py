@@ -1,8 +1,8 @@
 def calculate_hvb_length(config):
     """Calculate HVB length using correct formulas:
-    Einseitig (one-sided): (X-1) * 100 * 2 + Zuschlag 1 + Zuschlag 2
-    Beidseitig (two-sided): (X-1) * 100 + Zuschlag 1 + Zuschlag 2
-    
+    Einseitig (one-sided): ((X-1) * 100 + Zuschlag 1 + Zuschlag 2) * 2
+    Beidseitig (two-sided): ((X/2 - 1) * 100 + Zuschlag 1 + Zuschlag 2) * 2
+
     Where:
     - X = sondenanzahl (number of probes)
     - 100 = constant (NOT sondenabstand)
@@ -22,21 +22,22 @@ def calculate_hvb_length(config):
 
     # Constant value: 100 (NOT sondenabstand)
     constant = Decimal('100')
-    
-    # Calculate base: (X-1) * 100
-    base = (sondenanzahl - 1) * constant
-    
+
     # Apply formula based on anschlussart
     if anschlussart == 'einseitig':
-        # Einseitig: (X-1) * 100 * 2 + Zuschlag 1 + Zuschlag 2
-        total_mm = base * Decimal('2') + zuschlag_links + zuschlag_rechts
+        # Einseitig: ((X-1) * 100 + Zuschlag 1 + Zuschlag 2) * 2
+        base = (sondenanzahl - 1) * constant
+        total_mm = (base + zuschlag_links + zuschlag_rechts) * Decimal('2')
     elif anschlussart == 'beidseitig':
-        # Beidseitig: (X-1) * 100 + Zuschlag 1 + Zuschlag 2
-        total_mm = base + zuschlag_links + zuschlag_rechts
+        # Beidseitig: ((X/2 - 1) * 100 + Zuschlag 1 + Zuschlag 2) * 2
+        half_probes = sondenanzahl / Decimal('2')
+        base = (half_probes - 1) * constant
+        total_mm = (base + zuschlag_links + zuschlag_rechts) * Decimal('2')
     else:
         # Default to einseitig if unknown
-        total_mm = base * Decimal('2') + zuschlag_links + zuschlag_rechts
-    
+        base = (sondenanzahl - 1) * constant
+        total_mm = (base + zuschlag_links + zuschlag_rechts) * Decimal('2')
+
     if total_mm <= 0:
         return None
     return total_mm / Decimal('1000')
@@ -605,6 +606,82 @@ def get_hvb_stuetze_articles(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def get_probe_lengths(request):
+    """Return pre-configured Vorlauf/Rücklauf lengths from Sondengroesse database.
+    
+    Lookup is based on Schachttyp, HVB, Bauform, and Sondenanzahl (within range).
+    Probe diameter does NOT affect the lengths — only which pipe article is used.
+    """
+    try:
+        data = json.loads(request.body)
+        schachttyp = (data.get('schachttyp') or '').strip()
+        hvb_size = (data.get('hvb_size') or '').strip()
+        bauform = (data.get('bauform') or '').strip()
+        sondenanzahl = data.get('sondenanzahl')
+
+        if not schachttyp or not hvb_size or sondenanzahl is None:
+            return JsonResponse({'found': False, 'error': 'Missing required fields'})
+
+        try:
+            sondenanzahl = int(sondenanzahl)
+        except (ValueError, TypeError):
+            return JsonResponse({'found': False, 'error': 'Invalid sondenanzahl'})
+
+        # Build query: match schachttyp and hvb, optionally bauform
+        candidates = Sondengroesse.objects.filter(
+            schachttyp__iexact=schachttyp,
+            hvb=hvb_size,
+        )
+
+        # If bauform is provided, prefer exact match; fall back to empty/null bauform
+        if bauform:
+            bauform_candidates = candidates.filter(bauform__iexact=bauform)
+            if not bauform_candidates.exists():
+                # Also try with first letter (e.g. "I-Form (einseitig)" -> look for matching)
+                bauform_candidates = candidates.filter(
+                    Q(bauform__isnull=True) | Q(bauform='')
+                )
+            candidates = bauform_candidates if bauform_candidates.exists() else candidates
+        else:
+            # No bauform selected — prefer entries without bauform
+            no_bauform = candidates.filter(Q(bauform__isnull=True) | Q(bauform=''))
+            if no_bauform.exists():
+                candidates = no_bauform
+
+        # Find best match where sondenanzahl is within min-max range
+        best_match = None
+        for entry in candidates:
+            min_count = entry.sondenanzahl_min or 0
+            max_count = entry.sondenanzahl_max or 999999
+            if min_count <= sondenanzahl <= max_count:
+                best_match = entry
+                break
+
+        # Fallback: take first candidate if no range match
+        if best_match is None and candidates.exists():
+            best_match = candidates.first()
+
+        if best_match:
+            return JsonResponse({
+                'found': True,
+                'vorlauf_laenge': str(best_match.vorlauf_laenge) if best_match.vorlauf_laenge is not None else None,
+                'ruecklauf_laenge': str(best_match.ruecklauf_laenge) if best_match.ruecklauf_laenge is not None else None,
+                'schachttyp': best_match.schachttyp,
+                'hvb': best_match.hvb,
+                'bauform': best_match.bauform or '',
+                'sondenanzahl_min': best_match.sondenanzahl_min,
+                'sondenanzahl_max': best_match.sondenanzahl_max,
+            })
+        else:
+            return JsonResponse({'found': False})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'found': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def get_gnx_chamber_articles(request):
     """Get GN X chamber articles based on HVB size - only return articles that exist in product data"""
     data = json.loads(request.body)
@@ -826,33 +903,65 @@ def generate_bom(request):
             bom_items.append(bom_item)
         
         # Add Sonden items (probe pipes)
-        # Dynamic selection: Match by probe diameter and schachttyp, then find best match by sondenanzahl range
-        # HVB size is NOT used for filtering - probe pipes are selected based on probe diameter
+        # Dynamic selection: Match by probe diameter and schachttyp/HVB/bauform/sondenanzahl range
+        # Step 1: Try to find a record that matches ALL criteria (schachttyp, HVB, bauform, sondenanzahl range)
+        # Step 2: Fall back to just probe diameter + schachttyp if no full match
+        sondenanzahl = config.sondenanzahl or 0
+        bauform_raw = str(config.bauform or '').strip()
+        # Normalize bauform: extract just the letter (e.g. "I-Form (einseitig)" -> "I", "U" -> "U")
+        bauform_letter = ''
+        if bauform_raw:
+            bauform_letter = bauform_raw[0].upper() if bauform_raw else ''
+
+        # Try full match first (with HVB and bauform)
         sonden_candidates = Sondengroesse.objects.filter(
             durchmesser_sonde=config.sonden_durchmesser,
-            schachttyp=config.schachttyp
+            schachttyp__iexact=config.schachttyp,
+            hvb=str(config.hvb_size),
         )
-        
+        if bauform_letter:
+            bauform_filtered = sonden_candidates.filter(bauform__iexact=bauform_letter)
+            if bauform_filtered.exists():
+                sonden_candidates = bauform_filtered
+            else:
+                # Also try empty bauform
+                sonden_candidates_no_bauform = sonden_candidates.filter(
+                    Q(bauform__isnull=True) | Q(bauform='')
+                )
+                if sonden_candidates_no_bauform.exists():
+                    sonden_candidates = sonden_candidates_no_bauform
+
         # Find the best match based on sondenanzahl being within the allowed range
         # Priority: 1) sondenanzahl within range, 2) closest match
         best_match = None
-        sondenanzahl = config.sondenanzahl or 0
         
         for sonde in sonden_candidates:
             if not sonde.artikelnummer:
                 continue
-            
-            # Check if sondenanzahl is within the allowed range
             min_count = sonde.sondenanzahl_min or 0
             max_count = sonde.sondenanzahl_max or 999999
-            
             if min_count <= sondenanzahl <= max_count:
-                # Perfect match - use this one
                 best_match = sonde
                 break
             elif best_match is None:
-                # First candidate, use as fallback
                 best_match = sonde
+
+        # Fallback: if no full match, try with just probe diameter + schachttyp
+        if best_match is None:
+            fallback_candidates = Sondengroesse.objects.filter(
+                durchmesser_sonde=config.sonden_durchmesser,
+                schachttyp__iexact=config.schachttyp,
+            )
+            for sonde in fallback_candidates:
+                if not sonde.artikelnummer:
+                    continue
+                min_count = sonde.sondenanzahl_min or 0
+                max_count = sonde.sondenanzahl_max or 999999
+                if min_count <= sondenanzahl <= max_count:
+                    best_match = sonde
+                    break
+                elif best_match is None:
+                    best_match = sonde
         
         # If we found a match, add it to BOM
         if best_match and best_match.artikelnummer:
@@ -1096,6 +1205,92 @@ def configuration_list(request):
     return render(request, 'configurator/configuration_list.html', context)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_bom_items(request):
+    """Delete multiple BOM items in bulk"""
+    try:
+        data = json.loads(request.body)
+        config_id = data.get('config_id')
+        item_ids = data.get('item_ids', [])
+        
+        if not config_id:
+            return JsonResponse({'success': False, 'error': 'Missing config_id'}, status=400)
+        
+        if not item_ids or not isinstance(item_ids, list):
+            return JsonResponse({'success': False, 'error': 'Missing or invalid item_ids'}, status=400)
+        
+        # Verify the configuration exists
+        config = get_object_or_404(BOMConfiguration, id=config_id)
+        
+        # Get the items that belong to this configuration
+        items_to_delete = BOMItem.objects.filter(
+            id__in=item_ids,
+            configuration=config
+        )
+        
+        deleted_count = items_to_delete.count()
+        
+        if deleted_count == 0:
+            return JsonResponse({'success': False, 'error': 'No items found to delete'}, status=404)
+        
+        # Delete the items
+        items_to_delete.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Successfully deleted {deleted_count} item(s)'
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_bom_items(request):
+    """Delete multiple BOM items in bulk"""
+    try:
+        data = json.loads(request.body)
+        config_id = data.get('config_id')
+        item_ids = data.get('item_ids', [])
+        
+        if not config_id:
+            return JsonResponse({'success': False, 'error': 'Missing config_id'}, status=400)
+        
+        if not item_ids or not isinstance(item_ids, list):
+            return JsonResponse({'success': False, 'error': 'Missing or invalid item_ids'}, status=400)
+        
+        # Verify the configuration exists
+        config = get_object_or_404(BOMConfiguration, id=config_id)
+        
+        # Get the items that belong to this configuration
+        items_to_delete = BOMItem.objects.filter(
+            id__in=item_ids,
+            configuration=config
+        )
+        
+        deleted_count = items_to_delete.count()
+        
+        if deleted_count == 0:
+            return JsonResponse({'success': False, 'error': 'No items found to delete'}, status=404)
+        
+        # Delete the items
+        items_to_delete.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Successfully deleted {deleted_count} item(s)'
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 def delete_configuration(request, config_id):
     """Delete a BOM configuration"""
     config = get_object_or_404(BOMConfiguration, id=config_id)
@@ -1109,6 +1304,38 @@ def delete_configuration(request, config_id):
         'configuration': config,
     }
     return render(request, 'configurator/delete_configuration.html', context)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_configurations(request):
+    """Delete multiple BOM configurations in bulk"""
+    try:
+        data = json.loads(request.body)
+        config_ids = data.get('config_ids', [])
+        
+        if not config_ids or not isinstance(config_ids, list):
+            return JsonResponse({'success': False, 'error': 'Missing or invalid config_ids'}, status=400)
+        
+        # Get the configurations to delete
+        configs_to_delete = BOMConfiguration.objects.filter(id__in=config_ids)
+        deleted_count = configs_to_delete.count()
+        
+        if deleted_count == 0:
+            return JsonResponse({'success': False, 'error': 'No configurations found to delete'}, status=404)
+        
+        # Delete the configurations (this will cascade delete related BOMItems)
+        configs_to_delete.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Successfully deleted {deleted_count} configuration(s)'
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @csrf_exempt
@@ -1277,9 +1504,10 @@ def debug_probes_endpoint(request):
 @csrf_exempt
 @require_http_methods(["POST", "GET"])
 def test_endpoint(request):
-    """Simple test endpoint to verify AJAX is working"""
     return JsonResponse({
         'status': 'success',
-        'message': 'Test endpoint is working!',
+        'message': 'Test endpoint working',
         'method': request.method
     })
+    
+    
