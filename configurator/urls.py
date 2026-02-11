@@ -15,6 +15,7 @@ urlpatterns = [
     path('api/allowed-hvb-sizes/', views.get_allowed_hvb_sizes, name='get_allowed_hvb_sizes'),
     path('api/schachtgrenze-info/', views.get_schachtgrenze_info, name='get_schachtgrenze_info'),
     path('api/dfm-options/', views.get_dfm_options, name='get_dfm_options'),
+    path('api/wp-options/', views.get_wp_options, name='get_wp_options'),
     path('api/check-configuration/', views.check_existing_configuration, name='check_existing_configuration'),
     path('api/hvb-stuetze-articles/', views.get_hvb_stuetze_articles, name='get_hvb_stuetze_articles'),
     path('api/probe-lengths/', views.get_probe_lengths, name='get_probe_lengths'),

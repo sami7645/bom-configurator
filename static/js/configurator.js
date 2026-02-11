@@ -25,6 +25,13 @@ $(document).ready(function() {
         // Range is set by schachttyp, but we can validate the current value
         validateSondenanzahl();
     });
+
+    // Enforce sondenanzahl range not just via arrows but also for keyboard input.
+    // We do NOT auto-correct out-of-range values; instead we mark the field invalid
+    // and block navigation to the next step until the user fixes it.
+    $('#sondenanzahl').on('input change blur', function() {
+        validateSondenanzahl();
+    });
     // Sonden Durchmesser dropdown is now based only on Schachttyp (from CSV)
     // But only load it when entering step 2, not when Schachttyp changes in step 1
     $('#schachttyp').on('change', function() {
@@ -43,6 +50,7 @@ $(document).ready(function() {
     $('#hvbSize').on('change', function() {
         loadGNXArticles();
         loadHVBStuetzeArticles();
+        updateWPOptions();
     });
     $('#dfmCategory').on('change', handleDFMCategoryChange);
     $('#dfmType').on('change', function() {
@@ -185,6 +193,14 @@ function validateStep(step) {
             isValid = false;
         }
     });
+
+    // Additional semantic validation for specific steps.
+    // For step 2, ensure sondenanzahl is within the allowed min/max range.
+    if (step === 2) {
+        if (!validateSondenanzahl()) {
+            isValid = false;
+        }
+    }
     
     return isValid;
 }
@@ -194,6 +210,8 @@ const fieldLabels = {
     'configuration_name': 'Konfigurationsname',
     'schachttyp': 'Schachttyp',
     'hvb_size': 'HVB-Größe',
+    'wp_diameter': 'WP-Durchmesser',
+    'wp_diameter': 'WP-Durchmesser',
     'anschlussart': 'Anschlussart',
     'sonden_durchmesser': 'Sonden-Durchmesser',
     'sondenanzahl': 'Anzahl Sonden',
@@ -211,7 +229,7 @@ const fieldLabels = {
 
 // Step field mapping - which fields belong to which step
 const stepFields = {
-    1: ['configuration_name', 'schachttyp', 'hvb_size'],
+    1: ['configuration_name', 'schachttyp', 'hvb_size', 'wp_diameter'],
     2: ['anschlussart', 'sonden_durchmesser', 'sondenanzahl', 'sondenabstand', 'bauform', 'zuschlag_links', 'zuschlag_rechts', 'vorlauf_length_per_probe', 'ruecklauf_length_per_probe'],
     3: ['kugelhahn_type', 'dfm_category', 'dfm_type', 'dfm_kugelhahn_type']
 };
@@ -221,6 +239,7 @@ function formatFieldValue(fieldName, value) {
     
     // Format specific fields
     if (fieldName === 'hvb_size') return `${value}mm`;
+    if (fieldName === 'wp_diameter') return `${value}mm`;
     if (fieldName === 'sonden_durchmesser') return `${value}mm`;
     if (fieldName === 'sondenabstand') return `${value}mm`;
     if (fieldName === 'bauform') return value === 'U' ? 'U-Form' : 'I-Form';
@@ -237,6 +256,8 @@ const fieldIdMap = {
     'configuration_name': 'configName',
     'schachttyp': 'schachttyp',
     'hvb_size': 'hvbSize',
+    'wp_diameter': 'wpDiameter',
+    'wp_diameter': 'wpDiameter',
     'anschlussart': 'anschlussart',
     'sonden_durchmesser': 'sondenDurchmesser',
     'sondenanzahl': 'sondenanzahl',
@@ -447,7 +468,8 @@ function saveStepData(step) {
     // Save data from current step to configurationData
     if (stepFields[step]) {
         stepFields[step].forEach(fieldName => {
-            const fieldId = fieldName.replace(/_/g, '');
+            // Map from field name to DOM ID
+            const fieldId = fieldIdMap[fieldName] || fieldName.replace(/_/g, '');
             const $field = $(`#${fieldId}`);
             if ($field.length) {
                 configurationData[fieldName] = $field.val() || '';
@@ -1069,17 +1091,8 @@ function updateSondenanzahlFromSchachtgrenze() {
                 $('#sondenanzahlRange').text(`Erlaubter Bereich: ${min} - ∞ Sonden`);
             }
             
-            // If current value exceeds max, reset it
-            const currentValue = parseInt($('#sondenanzahl').val()) || 0;
-            if (max && currentValue > max) {
-                $('#sondenanzahl').val(max);
-            }
-            if (currentValue < min) {
-                $('#sondenanzahl').val(min);
-            }
-            
-            // Remove any error styling
-            $('#sondenanzahl').removeClass('is-invalid');
+            // After updating the allowed range, validate (but do not auto-correct) the current value.
+            validateSondenanzahl();
         },
         error: function(xhr, status, error) {
             console.error('Error fetching Schachtgrenze info:', error, xhr.responseText);
@@ -1091,17 +1104,83 @@ function updateSondenanzahlFromSchachtgrenze() {
     });
 }
 
-function validateSondenanzahl() {
-    // Validate current sondenanzahl value against min/max
-    const currentValue = parseInt($('#sondenanzahl').val()) || 0;
-    const min = parseInt($('#sondenanzahl').attr('min')) || 2;
-    const max = parseInt($('#sondenanzahl').attr('max')) || null;
-    
-    if (currentValue < min) {
-        $('#sondenanzahl').val(min);
-    } else if (max && currentValue > max) {
-        $('#sondenanzahl').val(max);
+function updateWPOptions() {
+    const hvbSize = $('#hvbSize').val();
+    const $wpSelect = $('#wpDiameter');
+    const $hint = $('#wpDiameterHint');
+
+    // Reset when no HVB is selected
+    if (!hvbSize) {
+        $wpSelect.html('<option value="">Keinen auswählen</option>').prop('disabled', true);
+        $hint.text('');
+        return;
     }
+
+    $wpSelect.prop('disabled', false);
+    $wpSelect.html('<option value="">Lade WP-Optionen...</option>');
+    $hint.text('');
+
+    const csrftoken = $('[name=csrfmiddlewaretoken]').val();
+
+    $.ajax({
+        url: '/api/wp-options/',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': csrftoken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        data: JSON.stringify({ hvb_size: hvbSize }),
+        success: function(response) {
+            const options = response.wp_options || [];
+            let html = '<option value="">Keinen auswählen</option>';
+            options.forEach(function(dia) {
+                html += `<option value="${dia}">${'DA ' + dia}</option>`;
+            });
+            $wpSelect.html(html);
+
+            if (options.length === 0) {
+                $hint.text('Für diese HVB-Größe sind keine WP-Durchmesser definiert.');
+            } else {
+                $hint.text('Wählen Sie den WP-Durchmesser (Wärmepumpenanschluss).');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading WP options:', error, xhr.responseText);
+            $wpSelect.html('<option value="">Keinen auswählen</option>').prop('disabled', true);
+            $hint.text('Fehler beim Laden der WP-Optionen.');
+        }
+    });
+}
+
+function validateSondenanzahl() {
+    // Validate current sondenanzahl value against min/max WITHOUT auto-correcting.
+    // If out of range, mark the field as invalid and let step validation block navigation.
+    const $field = $('#sondenanzahl');
+    const rawValue = $field.val();
+    const value = parseInt(rawValue, 10);
+    const min = parseInt($field.attr('min'), 10) || 2;
+    const maxAttr = $field.attr('max');
+    const max = maxAttr ? parseInt(maxAttr, 10) : null;
+
+    let isValid = true;
+
+    if (!rawValue || isNaN(value)) {
+        isValid = false;
+    } else if (value < min) {
+        isValid = false;
+    } else if (max && value > max) {
+        isValid = false;
+    }
+
+    $field.removeClass('is-valid is-invalid');
+    if (isValid) {
+        $field.addClass('is-valid');
+    } else {
+        $field.addClass('is-invalid');
+    }
+
+    return isValid;
 }
 
 function updateSondenanzahlRange() {
@@ -1444,6 +1523,8 @@ function checkConfiguration() {
         configuration_name: $('#configName').val(),
         schachttyp: $('#schachttyp').val(),
         hvb_size: $('#hvbSize').val(),
+        wp_diameter: $('#wpDiameter').val(),
+        wp_diameter: $('#wpDiameter').val(),
         sonden_durchmesser: $('#sondenDurchmesser').val(),
         sondenanzahl: $('#sondenanzahl').val(),
         sondenabstand: $('#sondenabstand').val(),

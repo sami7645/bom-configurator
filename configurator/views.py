@@ -49,7 +49,7 @@ from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.db.models import Q
+from django.db.models import Q, Min
 from .models import (
     Schacht, HVB, Sondengroesse, Sondenabstand, SondenDurchmesser, Kugelhahn, DFM,
     BOMConfiguration, BOMItem, GNXChamberArticle, GNXChamberConfiguration,
@@ -385,8 +385,6 @@ def get_schachtgrenze_info(request):
 @require_http_methods(["POST"])
 def get_dfm_options(request):
     """Get DFM options based on category"""
-    from configurator.utils import sort_by_numeric_range
-    
     data = json.loads(request.body)
     category = data.get('category', '')
     
@@ -395,10 +393,16 @@ def get_dfm_options(request):
     
     # Exclude category headers that shouldn't be selectable
     exclude_categories = ['Brass Flowmeters', 'Plastic Flowmeters']
-    all_dfm_types = DFM.objects.exclude(
-        durchflussarmatur__in=exclude_categories
-    ).values('durchflussarmatur').distinct().order_by('durchflussarmatur')
-    
+
+    # Preserve the original CSV order by using the smallest primary key (id)
+    # for each distinct Durchflussarmatur instead of alphabetical ordering.
+    all_dfm_types = (
+        DFM.objects.exclude(durchflussarmatur__in=exclude_categories)
+        .values('durchflussarmatur')
+        .annotate(first_id=Min('id'))
+        .order_by('first_id')
+    )
+
     dfm_options = []
     
     # "Kugelhahn-Typ" is always available as an option regardless of category
@@ -418,12 +422,46 @@ def get_dfm_options(request):
                 name.startswith('IMI TA')):
                 dfm_options.append(name)
     
-    # Sort by numeric range (e.g., "2-12", "5-42", "8-28", "35-70")
-    dfm_options = sort_by_numeric_range(dfm_options)
-    
     return JsonResponse({
         'dfm_options': dfm_options
     })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_wp_options(request):
+    """Return available WP diameters for a given HVB size based on WPA.csv data."""
+    from .models import WPA
+    import re
+
+    try:
+        data = json.loads(request.body)
+        hvb_size = str(data.get('hvb_size', '')).strip()
+
+        if not hvb_size:
+            return JsonResponse({'wp_options': []})
+
+        # Remove 'mm' suffix if present (e.g., '110mm' -> '110')
+        if hvb_size.lower().endswith('mm'):
+            hvb_size = hvb_size[:-2].strip()
+
+        # In WPA model, the "name" field stores the HVB diameter from the first column.
+        wpa_entries = WPA.objects.filter(name=hvb_size)
+
+        wp_diameters = set()
+        for entry in wpa_entries:
+            desc = entry.artikelbezeichnung or ''
+            # Extract WP diameter from pattern "DA <HVB> / <WP> kurz"
+            match = re.search(r'DA\s+\d{2,3}\s*/\s*(\d{2,3})', desc)
+            if match:
+                wp_diameters.add(match.group(1))
+
+        # Return sorted list of unique WP diameters (as strings)
+        wp_options = sorted(wp_diameters, key=lambda x: int(x))
+
+        return JsonResponse({'wp_options': wp_options})
+    except Exception as e:
+        return JsonResponse({'wp_options': [], 'error': str(e)}, status=500)
 
 
 @csrf_exempt
@@ -850,6 +888,8 @@ def generate_bom(request):
             zuschlag_links=zuschlag_links,
             zuschlag_rechts=zuschlag_rechts
         )
+        # Attach WP diameter dynamically for BOM rule processing (not persisted as a model field)
+        config.wp_diameter = (data.get('wp_diameter') or '').strip()
         
         # Calculate context for formulas
         calc_context = config.calculate_quantities()
@@ -1101,6 +1141,7 @@ def generate_bom(request):
         additional_components.extend(bom_rules.build_plastic_dfm_components(config, calc_context))
         additional_components.extend(bom_rules.build_sondenverschlusskappen(config, calc_context))
         additional_components.extend(bom_rules.build_stumpfschweiss_endkappen(config))
+        additional_components.extend(bom_rules.build_wp_components(config, calc_context))
         additional_components.extend(bom_rules.build_entlueftung_components(config, calc_context))
         additional_components.extend(bom_rules.build_manifold_components(config))
 
@@ -1184,7 +1225,10 @@ def generate_bom(request):
 def view_configuration(request, config_id):
     """View a specific BOM configuration"""
     config = get_object_or_404(BOMConfiguration, id=config_id)
-    bom_items = config.items.all().order_by('artikelnummer')
+    # Preserve the original BOM order as generated during configuration.
+    # BOM items are created in the desired sequence, so we simply rely on
+    # the insertion/primary-key order instead of re-sorting by artikelnummer.
+    bom_items = config.items.all().order_by('id')
     gnx_configurations = config.gnxchamberconfiguration_set.all()
     
     context = {

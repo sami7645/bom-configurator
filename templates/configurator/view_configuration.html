@@ -283,13 +283,14 @@
 {% block extra_js %}
 <script>
 function exportBOM() {
-    // CSV export: Artikelnummer, Menge, Artikelbeschreibung (semicolon, comma decimal, 3 decimals)
+    // CSV export: Artikelnummer;Menge;Artikelbeschreibung (no quotes, comma decimals like Excel)
     const table = document.querySelector('.bom-table table');
     let csv = [];
-    
+
+    // Header row exactly as required
     const headers = ['Artikelnummer', 'Menge', 'Artikelbeschreibung'];
     csv.push(headers.join(';'));
-    
+
     // Table columns: [Pos. (0), Artikelnummer (1), Artikelbezeichnung (2), Menge (3), Quelle (4)]
     const rows = table.querySelectorAll('tbody tr');
     rows.forEach(row => {
@@ -297,33 +298,53 @@ function exportBOM() {
         let artikelnummer = '';
         let menge = '';
         let artikelbezeichnung = '';
-        
+
         if (cells.length > 1) {
-            artikelnummer = (cells[1].textContent || '').trim().replace(/<[^>]*>/g, '');
+            artikelnummer = (cells[1].textContent || '').trim();
         }
         if (cells.length > 2) {
             artikelbezeichnung = (cells[2].textContent || '').trim();
         }
         if (cells.length > 3) {
-            menge = (cells[3].textContent || '').trim().split('\n')[0].trim().replace(/<[^>]*>/g, '');
-            let mengeNumber = parseFloat(menge.replace(/,/g, '.').replace(/\s/g, '').replace(/[^\d.-]/g, ''));
+            // Raw text for Menge cell (may contain line breaks and "berechnet" info)
+            menge = (cells[3].textContent || '').trim().split('\n')[0].trim();
+
+            // Normalise and parse number (supports "." or "," as decimal)
+            let mengeNumber = parseFloat(
+                menge
+                    .replace(/\s/g, '')
+                    .replace(/[^\d,.-]/g, '')
+                    .replace(/,/g, '.')
+            );
+
             if (!isNaN(mengeNumber)) {
-                menge = mengeNumber.toFixed(3).replace(/\./g, ',');
-            } else {
-                const numMatch = menge.match(/[\d,.-]+/);
-                if (numMatch) {
-                    mengeNumber = parseFloat(numMatch[0].replace(/,/g, '.'));
-                    menge = !isNaN(mengeNumber) ? mengeNumber.toFixed(3).replace(/\./g, ',') : menge.replace(/\./g, ',');
+                // If it's effectively an integer, show without decimals (e.g. 2)
+                if (Number.isInteger(mengeNumber)) {
+                    menge = String(mengeNumber);
                 } else {
-                    menge = '0,000';
+                    // Otherwise format with up to 3 decimals, trim trailing zeros
+                    let s = mengeNumber.toFixed(3); // e.g. "1.290"
+                    s = s.replace(/0+$/, '');       // "1.29" or "1."
+                    s = s.replace(/\.$/, '');       // "1"
+                    menge = s.replace('.', ',');    // use comma as decimal separator
                 }
+            } else {
+                menge = '0';
             }
         }
+
+        // Clean whitespace
         artikelnummer = artikelnummer.replace(/\s+/g, ' ').trim();
-        artikelbezeichnung = artikelbezeichnung.replace(/\s+/g, ' ').trim();
-        csv.push([`"${artikelnummer}"`, `"${menge}"`, `"${artikelbezeichnung}"`].join(';'));
+        // Remove bracketed suffixes like "(Sonden)", "(HVB)" from description in export
+        artikelbezeichnung = artikelbezeichnung
+            .replace(/\s*\([^)]*\)/g, '')  // drop any " (....)" parts
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        // Build row WITHOUT quotes, using semicolon as separator
+        csv.push([artikelnummer, menge, artikelbezeichnung].join(';'));
     });
-    
+
     const csvContent = csv.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');

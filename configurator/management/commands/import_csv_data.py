@@ -40,7 +40,7 @@ class Command(BaseCommand):
             'Schacht.csv': self.import_schacht,
             'HVB.csv': self.import_hvb,
             'Sondengroesse - Sondenlaenge.csv': self.import_sondengroesse,
-            'Sonden Durchmesser.csv': self.import_sonden_durchmesser,
+            'Schacht-Sondendurchmesser.csv': self.import_sonden_durchmesser,
             'Sondenabstaende.csv': self.import_sondenabstand,
             'Kugelhaehne.csv': self.import_kugelhahn,
             'DFM.csv': self.import_dfm,
@@ -53,7 +53,7 @@ class Command(BaseCommand):
             'Schachtgrenze.csv': self.import_schachtgrenze,
             'Schachtkompatibilitaet.csv': self.import_schachtkompatibilitaet,
             'GNXChamberArticle.csv': self.import_gnx_chamber_articles_csv,
-            'GN X-Series - Extra Articles.csv': self.import_gnx_extra_articles_csv,
+            'GN X - Articles.csv': self.import_gnx_extra_articles_csv,
             'AdditionalProbeCombinations.csv': self.import_additional_probe_combinations_csv,
         }
 
@@ -99,7 +99,7 @@ class Command(BaseCommand):
                 'Schacht.csv': self.import_schacht,
                 'HVB.csv': self.import_hvb,
                 'Sondengroesse - Sondenlaenge.csv': self.import_sondengroesse,
-                'Sonden Durchmesser.csv': self.import_sonden_durchmesser,
+                'Schacht-Sondendurchmesser.csv': self.import_sonden_durchmesser,
                 'Sondenabstaende.csv': self.import_sondenabstand,
                 'Kugelhaehne.csv': self.import_kugelhahn,
                 'DFM.csv': self.import_dfm,
@@ -112,7 +112,7 @@ class Command(BaseCommand):
                 'Schachtgrenze.csv': self.import_schachtgrenze,
                 'Schachtkompatibilitaet.csv': self.import_schachtkompatibilitaet,
                 'GNXChamberArticle.csv': self.import_gnx_chamber_articles_csv,
-                'GN X-Series - Extra Articles.csv': self.import_gnx_extra_articles_csv,
+                'GN X - Articles.csv': self.import_gnx_extra_articles_csv,
                 'AdditionalProbeCombinations.csv': self.import_additional_probe_combinations_csv,
             }
             import_func = import_functions.get(filename)

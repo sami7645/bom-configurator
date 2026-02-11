@@ -10,6 +10,8 @@ from ..models import (
     Sondenverschlusskappe,
     StumpfschweissEndkappe,
     HVBStuetze,
+    WPVerschlusskappe,
+    WPA,
 )
 from ..utils import calculate_formula, check_compatibility, format_artikelnummer
 
@@ -266,15 +268,29 @@ def build_manifold_components(config) -> List[Dict]:
 
 
 def build_plastic_dfm_components(config, context) -> List[Dict]:
-    """Build plastic DFM components - only main flowmeter, accessories handled by Kugelhahn"""
+    """Build DFM components (plastic and brass).
+
+    Original behaviour:
+    - Only handled plastic DFM types where dfm_type starts with "K-DFM".
+    - Brass flowmeter selections (e.g. HC VTR, IMI STAD, IMI TA) were ignored.
+
+    Updated behaviour:
+    - Process ANY selected dfm_type (both plastic and brass), as long as it is
+      not empty.
+    - We still retain the plastic-specific default Kugelhahn mapping
+      (DN 25 / DA 32) only for K-DFM series to keep previous logic intact.
+    """
     items: List[Dict] = []
-    if not config.dfm_type or not config.dfm_type.startswith('K-DFM'):
+    # If no DFM type selected, nothing to build
+    if not config.dfm_type:
         return items
 
     # Determine kugelhahn_type for checking formulas
     kugelhahn_type = config.kugelhahn_type
+    # For plastic DFM (K-DFM) we keep the old default behaviour:
+    # if no Kugelhahn was explicitly chosen, assume DN 25 / DA 32.
     if not kugelhahn_type and config.dfm_type and config.dfm_type.startswith('K-DFM'):
-        kugelhahn_type = "DN 25 / DA 32"  # Default for plastic DFM
+        kugelhahn_type = "DN 25 / DA 32"
 
     # Build a map of article numbers to their formulas from Kugelhahn
     kugelhahn_formula_map = {}
@@ -330,6 +346,70 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
                 "source_table": "DFM",
             }
         )
+    return items
+
+
+def build_wp_components(config, context) -> List[Dict]:
+    """Build WP (heat pump connection) components based on HVB and WP diameters.
+
+    Uses:
+    - WPA (excel_files/WPA.csv): Stumpfschweiß-Reduktion DA <HVB> / <WP> kurz
+    - WPVerschlusskappe (excel_files/WP-Verschlusskappen.csv): Sondenverschlusskappe DA <WP>
+
+    Business rules (from Excel):
+    - For each valid combination of HVB diameter and WP diameter:
+      - 2 pieces of the corresponding Stumpfschweiß-Reduktion (from WPA).
+      - 2 pieces of the corresponding WP-Verschlusskappe (from WP-Verschlusskappen.csv).
+    """
+    items: List[Dict] = []
+
+    # HVB size from configuration (may contain "mm" suffix)
+    hvb_size = str(config.hvb_size or "").strip()
+    if hvb_size.lower().endswith("mm"):
+        hvb_size = hvb_size[:-2].strip()
+
+    # WP diameter is passed from the frontend but not stored in the model;
+    # we attach it dynamically to the config in generate_bom.
+    wp_diameter = str(getattr(config, "wp_diameter", "") or "").strip()
+
+    if not hvb_size or not wp_diameter:
+        return items
+
+    # 1) Stumpfschweiß-Reduktion from WPA (reduction DA <HVB> / <WP> kurz)
+    import re
+
+    wpa_entries = WPA.objects.filter(name=hvb_size)
+    for entry in wpa_entries:
+        desc = entry.artikelbezeichnung or ""
+        # Expect pattern like "Stumpfschweiß-Reduktion DA 110 / 50 kurz"
+        match = re.search(r"DA\s+\d{2,3}\s*/\s*(\d{2,3})", desc)
+        if match and match.group(1) == wp_diameter:
+            qty = entry.menge_statisch if entry.menge_statisch is not None else Decimal("2")
+            items.append(
+                {
+                    "artikelnummer": format_artikelnummer(entry.artikelnummer),
+                    "artikelbezeichnung": entry.artikelbezeichnung,
+                    "menge": _decimal(qty),
+                    "source_table": "WPA",
+                    "is_finalized": True,
+                }
+            )
+            break  # Only one WPA reduction per HVB/WP combination
+
+    # 2) WP-Verschlusskappe for the selected WP diameter
+    cap = WPVerschlusskappe.objects.filter(name=wp_diameter).first()
+    if cap:
+        qty = cap.menge_statisch if cap.menge_statisch is not None else Decimal("2")
+        items.append(
+            {
+                "artikelnummer": format_artikelnummer(cap.artikelnummer),
+                "artikelbezeichnung": cap.artikelbezeichnung,
+                "menge": _decimal(qty),
+                "source_table": "WP-Verschlusskappe",
+                "is_finalized": True,
+            }
+        )
+
     return items
 
 

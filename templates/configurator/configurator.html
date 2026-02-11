@@ -80,6 +80,15 @@
                                         {% endfor %}
                                     </select>
                                 </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="wpDiameter" class="form-label">WP-Durchmesser (optional)</label>
+                                    <select class="form-select" id="wpDiameter" name="wp_diameter">
+                                        <option value="">Keinen auswählen</option>
+                                    </select>
+                                    <div class="form-text">
+                                        <span id="wpDiameterHint"></span>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="text-end">
@@ -134,7 +143,7 @@
                                 <div class="col-md-6 mb-3">
                                     <label for="sondenanzahl" class="form-label">Anzahl Sonden</label>
                                     <input type="number" class="form-control" id="sondenanzahl" name="sondenanzahl" 
-                                           min="1" max="100" required>
+                                           min="1" max="100" value="2" required>
                                     <div class="form-text">
                                         <span id="sondenanzahlRange"></span>
                                     </div>
