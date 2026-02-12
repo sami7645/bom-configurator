@@ -414,9 +414,19 @@ def build_wp_components(config, context) -> List[Dict]:
 
 
 def build_kugelhahn_components(config, context) -> List[Dict]:
-    """Build Kugelhahn components based on specification rules"""
+    """
+    Build Kugelhahn components **directly** from CSV rules.
+
+    Philosophy:
+    - Trust the CSV completely (Kugelhaehne.csv):
+      - Menge Formel / Menge Statisch define the quantity.
+      - ET-HVB, ET-Sonden, KH-HVB define compatibility.
+    - Avoid hard-coded "special cases" for specific article numbers.
+    - Only add light, generic logic:
+      - Match DA size of non-Einschweißteil articles to the selected Kugelhahn DA.
+    """
     items: List[Dict] = []
-    
+
     # If no Kugelhahn selected but DFM is plastic, use DN 25 / DA 32 rules
     kugelhahn_type = config.kugelhahn_type
     if not kugelhahn_type and config.dfm_type and config.dfm_type.startswith('K-DFM'):
@@ -425,451 +435,119 @@ def build_kugelhahn_components(config, context) -> List[Dict]:
     if not kugelhahn_type:
         return items
 
-    # Dynamically extract DA size from Kugelhahn type name
+    # Dynamically extract DA size from Kugelhahn type name (for non-Einschweißteil rows)
     da_value = _extract_da_from_kugelhahn_type(kugelhahn_type)
-    if not da_value:
-        return items
 
-    per_probe = _decimal(config.sondenanzahl)
     hvb_size = str(config.hvb_size)
     probe_size = str(config.sonden_durchmesser)
 
-    def resolve_description(article_number: str, fallback: str) -> str:
-        kugelhahn_entry = Kugelhahn.objects.filter(artikelnummer=article_number).first()
-        if kugelhahn_entry:
-            return kugelhahn_entry.artikelbezeichnung
-        dfm_entry = DFM.objects.filter(artikelnummer=article_number).first()
-        if dfm_entry:
-            return dfm_entry.artikelbezeichnung
-        return fallback
-
-    def add_entry(entry):
-        # Only use menge_formel, ignore menge_statisch as per client requirement
-        if not entry.menge_formel:
-            return  # Skip items without formula
-        quantity = calculate_formula(entry.menge_formel, context)
-        if quantity is None or quantity <= 0:
-            return
-        items.append(
-            {
-                "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                "artikelbezeichnung": entry.artikelbezeichnung,
-                "menge": _decimal(quantity),
-                "source_table": "Kugelhahn",
-            }
-        )
-
-    # Special case: GN Einschweißteil DA 63 mm should be included
-    # whenever HVB = 63mm, regardless of Kugelhahn type
-    # Dynamically find any Einschweißteil with DA 63 that matches HVB = 63mm
-    # This works for current and future DA 63 Einschweißteil items
-    if hvb_size == "63":
-        import re
-        # Find all Einschweißteil items and check if they're DA 63
-        all_einschweiss = Kugelhahn.objects.filter(
-            artikelbezeichnung__icontains="Einschweißteil"
-        )
-        for entry in all_einschweiss:
-            # Extract DA size from description (e.g., "DA 63 mm" -> "63")
-            da_match = re.search(r'DA\s+(\d{2,3})\s*mm', entry.artikelbezeichnung or "", re.IGNORECASE)
-            if da_match and da_match.group(1) == "63":
-                # Check ET-HVB compatibility (should be DA 63)
-                if entry.et_hvb and check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
-                    quantity = calculate_formula("=sondenanzahl", context)
-                    if quantity and quantity > 0:
-                        items.append({
-                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                            "artikelbezeichnung": entry.artikelbezeichnung,
-                            "menge": _decimal(quantity),
-                            "source_table": "Kugelhahn",
-                        })
-                        break  # Only add one DA 63 Einschweißteil
-    
     entries = Kugelhahn.objects.filter(kugelhahn=kugelhahn_type)
     for entry in entries:
         if not entry.artikelnummer:
             continue
-        
+
         artikelbezeichnung = entry.artikelbezeichnung or ""
         is_einschweiss = "Einschweißteil" in artikelbezeichnung
-        
+
         # Extract DA size from description (e.g., "DA 63 mm" -> "63")
         import re
-        da_match = re.search(r'DA\s+(\d{2,3})\s*mm', artikelbezeichnung, re.IGNORECASE)
-        article_da_size = None
-        if da_match:
-            article_da_size = da_match.group(1)
-        
-        # Smart detection for Einlegeteil items that need sondenanzahl * 2
-        # Rule: "The quantity is number of probes times two (for HVB and probes)"
-        # Detect items with "Einlegeteil" but not "ohne Einlegeteil"
-        is_einlegeteil = "Einlegeteil" in artikelbezeichnung and "ohne Einlegeteil" not in artikelbezeichnung
-        
-        if is_einlegeteil:
-            # IMPORTANT: Einlegeteil articles must still respect compatibility rules.
-            # Enforce the same ET-HVB / ET-Sonden / KH-HVB checks as for other Kugelhahn items
-            if entry.et_hvb and not check_compatibility(entry.et_hvb, hvb_size, probe_size, "hvb"):
-                continue
-            if entry.et_sonden and not check_compatibility(entry.et_sonden, hvb_size, probe_size, "sonden"):
-                continue
-            if entry.kh_hvb and not check_compatibility(entry.kh_hvb, hvb_size, probe_size, "hvb"):
-                continue
-            
-            # Check if formula already contains *2 (like line 2001167)
-            has_multiply_2 = entry.menge_formel and "*2" in entry.menge_formel
-            
-            # If formula already has *2, use it as-is
-            if has_multiply_2:
-                add_entry(entry)
-            else:
-                # Override to sondenanzahl * 2 (for HVB and probes)
-                quantity = calculate_formula("=sondenanzahl*2", context)
-                if quantity and quantity > 0:
-                    items.append({
-                        "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                        "artikelbezeichnung": entry.artikelbezeichnung,
-                        "menge": _decimal(quantity),
-                        "source_table": "Kugelhahn",
-                    })
-            continue  # Skip other checks for Einlegeteil items
-        
-        # Special handling for Einschweißteil items based on business rules
-        # Note: CSV structure is fixed by client, so we work with existing fields
-        if is_einschweiss:
-            # 1. GN Einschweißteil DA 63 mm (2001179)
-            #    - Used ONLY for HVB
-            #    - Only when HVB = 63mm (ET-HVB = DA 63)
-            #    - Quantity = sondenanzahl (override static 1.0)
-            #    - Already handled above for all Kugelhahn types when HVB = 63mm
-            if article_da_size == "63":
-                # Skip if already added in special case above (when HVB = 63mm)
-                if hvb_size == "63":
-                    continue
-                # Otherwise, check ET-HVB compatibility (should be DA 63)
-                if entry.et_hvb and check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
-                    # Override static quantity to sondenanzahl
-                    quantity = calculate_formula("=sondenanzahl", context)
-                    if quantity and quantity > 0:
-                        items.append({
-                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                            "artikelbezeichnung": entry.artikelbezeichnung,
-                            "menge": _decimal(quantity),
-                            "source_table": "Kugelhahn",
-                        })
-                continue  # Skip other checks for DA 63 Einschweißteil
-            
-            # 2. GN Einschweißteil DA 40 mm (2001177)
-            #    - Used ONLY for Sonden (probes)
-            #    - NEVER for HVB (no ET-HVB field)
-            #    - Used when probe = DA 40 or 50mm (ET-Sonden = DA 40|DA 50)
-            #    - Quantity = sondenanzahl (already in formula)
-            if article_da_size == "40":
-                # Check ET-Sonden compatibility (should be DA 40|DA 50)
-                # Only include if ET-Sonden matches (never for HVB)
-                if entry.et_sonden and check_compatibility(entry.et_sonden, hvb_size, probe_size, 'sonden'):
-                    add_entry(entry)
-                continue  # Skip other checks for DA 40 Einschweißteil
-            
-            # 3. GN Einschweißteil DA 32 mm (2001178)
-            #    - Used for BOTH HVB and Sonden
-            #    - HVB: Used for every HVB which is NOT 63mm (KH-HVB field indicates HVB use)
-            #    - Sonden: Used if probes are DA 32mm
-            #    - Quantity = sondenanzahl (override formula =2)
-            #    - Exception: If Kugelhahn DA size is 40 (e.g., DN 32 / DA 40), we do NOT need Sonden version
-            #      This is future-proof: any Kugelhahn with DA 40 will skip DA 32 Einschweißteil (Sonden)
-            #    Note: CSV has one row with both ET-Sonden and KH-HVB fields
-            if article_da_size == "32":
-                # Check if used for HVB: KH-HVB field exists (indicates HVB use) and HVB is NOT 63mm
-                # Requirement: "always used for every HVB which is not 63 mm"
-                if entry.kh_hvb and entry.kh_hvb.strip() and hvb_size != "63":
-                    # Override quantity to sondenanzahl
-                    quantity = calculate_formula("=sondenanzahl", context)
-                    if quantity and quantity > 0:
-                        items.append({
-                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                            "artikelbezeichnung": entry.artikelbezeichnung + " (HVB)",
-                            "menge": _decimal(quantity),
-                            "source_table": "Kugelhahn",
-                        })
-                
-                # Check if used for Sonden: probe is DA 32mm
-                # Requirement: "always used if somebody selected probes with DA 32 mm"
-                # Exception: "If this ball valve is selected, we do not need 'Sonden' (probes) in DA 32 mm"
-                # Future-proof: Skip Sonden version if Kugelhahn DA size is 40 (works for DN 32 / DA 40 and future DA 40 types)
-                kugelhahn_da = _extract_da_from_kugelhahn_type(kugelhahn_type)
-                if probe_size == "32" and kugelhahn_da != "40":
-                    # Override quantity to sondenanzahl
-                    quantity = calculate_formula("=sondenanzahl", context)
-                    if quantity and quantity > 0:
-                        items.append({
-                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                            "artikelbezeichnung": entry.artikelbezeichnung + " (Sonden)",
-                            "menge": _decimal(quantity),
-                            "source_table": "Kugelhahn",
-                        })
-                continue  # Skip other checks for DA 32 Einschweißteil
-        
-        # Smart detection for Heizdorn-Reduktion items
-        # Rule: "The quantity is the same as number of probes" (sondenanzahl)
-        # Example: If DN 32 / DA 40 and probe = 50mm, include Heizdorn-Reduktion DA 50 / 40
-        is_heizdorn = "Heizdorn" in artikelbezeichnung or "Heizdorn-Reduktion" in artikelbezeichnung
-        
-        if is_heizdorn:
-            # Check ET-Sonden compatibility (should match probe size)
-            if entry.et_sonden and check_compatibility(entry.et_sonden, hvb_size, probe_size, 'sonden'):
-                # Override to sondenanzahl (ignore static value)
-                quantity = calculate_formula("=sondenanzahl", context)
-                if quantity and quantity > 0:
-                    items.append({
-                        "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                        "artikelbezeichnung": entry.artikelbezeichnung,
-                        "menge": _decimal(quantity),
-                        "source_table": "Kugelhahn",
-                    })
-            continue  # Skip other checks for Heizdorn-Reduktion items
-        
-        # For non-Einschweißteil items, filter by DA size mismatch first
-        if article_da_size and article_da_size != da_value:
-            print(f"DEBUG: Entry {entry.artikelnummer} filtered out - DA size mismatch: article is DA {article_da_size}, expected DA {da_value}")
+        da_match = re.search(r"DA\s+(\d{2,3})\s*mm", artikelbezeichnung, re.IGNORECASE)
+        article_da_size = da_match.group(1) if da_match else None
+
+        # Generic DA filter ONLY for non-Einschweißteil items:
+        # data already encodes which DA belongs to which Kugelhahn.
+        if not is_einschweiss and da_value and article_da_size and article_da_size != da_value:
             continue
-        
-        # For non-Einschweißteil items, apply standard compatibility checks
+
+        # Generic compatibility checks based on CSV columns
         if entry.et_hvb and not check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
             continue
         if entry.et_sonden and not check_compatibility(entry.et_sonden, hvb_size, probe_size, 'sonden'):
             continue
         if entry.kh_hvb and not check_compatibility(entry.kh_hvb, hvb_size, probe_size, 'hvb'):
             continue
-        
-        add_entry(entry)
+
+        # Quantity: prefer Formel, fall back to statisch
+        quantity = None
+        if entry.menge_formel:
+            quantity = calculate_formula(entry.menge_formel, context)
+        elif entry.menge_statisch is not None:
+            quantity = entry.menge_statisch
+
+        if quantity is None or quantity <= 0:
+            continue
+
+        items.append(
+            {
+                "artikelnummer": format_artikelnummer(entry.artikelnummer),
+                "artikelbezeichnung": artikelbezeichnung,
+                "menge": _decimal(quantity),
+                "source_table": "Kugelhahn",
+            }
+        )
 
     return items
 
 
 def build_dfm_kugelhahn_components(config, context) -> List[Dict]:
-    """Build D-Kugelhahn components (Kugelhahn-Typ selected from DFM dropdown) - separate from regular Kugelhahn"""
+    """Build D-Kugelhahn components (Kugelhahn-Typ selected from DFM dropdown)
+    purely based on CSV rules (Kugelhaehne.csv).
+
+    We mirror the logic from build_kugelhahn_components but label the
+    source_table as \"D-Kugelhahn\".
+    """
     items: List[Dict] = []
-    
-    # Get the DFM Kugelhahn type (selected from DFM dropdown)
+
     dfm_kugelhahn_type = config.dfm_kugelhahn_type
     if not dfm_kugelhahn_type:
         return items
 
-    # Dynamically extract DA size from D-Kugelhahn type name
     da_value = _extract_da_from_kugelhahn_type(dfm_kugelhahn_type)
-    if not da_value:
-        return items
-
-    per_probe = _decimal(config.sondenanzahl)
     hvb_size = str(config.hvb_size)
     probe_size = str(config.sonden_durchmesser)
 
-    def add_entry(entry):
-        # Only use menge_formel, ignore menge_statisch as per client requirement
-        if not entry.menge_formel:
-            return  # Skip items without formula
-        quantity = calculate_formula(entry.menge_formel, context)
-        if quantity is None or quantity <= 0:
-            return
-        items.append(
-            {
-                "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                "artikelbezeichnung": entry.artikelbezeichnung,
-                "menge": _decimal(quantity),
-                "source_table": "D-Kugelhahn",  # Different source to distinguish from regular Kugelhahn
-            }
-        )
-
-    # Special case: GN Einschweißteil DA 63 mm should be included
-    # whenever HVB = 63mm, regardless of D-Kugelhahn type
-    # Dynamically find any Einschweißteil with DA 63 that matches HVB = 63mm
-    # Only add if regular Kugelhahn is not set (to avoid duplicate)
-    if hvb_size == "63" and not config.kugelhahn_type:
-        import re
-        # Find all Einschweißteil items and check if they're DA 63
-        all_einschweiss = Kugelhahn.objects.filter(
-            artikelbezeichnung__icontains="Einschweißteil"
-        )
-        for entry in all_einschweiss:
-            # Extract DA size from description (e.g., "DA 63 mm" -> "63")
-            da_match = re.search(r'DA\s+(\d{2,3})\s*mm', entry.artikelbezeichnung or "", re.IGNORECASE)
-            if da_match and da_match.group(1) == "63":
-                # Check ET-HVB compatibility (should be DA 63)
-                if entry.et_hvb and check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
-                    quantity = calculate_formula("=sondenanzahl", context)
-                    if quantity and quantity > 0:
-                        items.append({
-                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                            "artikelbezeichnung": entry.artikelbezeichnung,
-                            "menge": _decimal(quantity),
-                            "source_table": "D-Kugelhahn",
-                        })
-                        break  # Only add one DA 63 Einschweißteil
-    
     entries = Kugelhahn.objects.filter(kugelhahn=dfm_kugelhahn_type)
-    print(f"DEBUG build_dfm_kugelhahn_components: Found {entries.count()} entries for dfm_kugelhahn_type='{dfm_kugelhahn_type}'")
     for entry in entries:
         if not entry.artikelnummer:
             continue
-        
+
         artikelbezeichnung = entry.artikelbezeichnung or ""
         is_einschweiss = "Einschweißteil" in artikelbezeichnung
-        
-        # Extract DA size from article description
-        import re
-        da_match = re.search(r'DA\s+(\d{2,3})\s*mm', artikelbezeichnung, re.IGNORECASE)
-        article_da_size = None
-        if da_match:
-            article_da_size = da_match.group(1)
-        
-        # Smart detection for Einlegeteil items that need sondenanzahl * 2
-        # Rule: "The quantity is number of probes times two (for HVB and probes)"
-        # Detect items with "Einlegeteil" but not "ohne Einlegeteil"
-        is_einlegeteil = "Einlegeteil" in artikelbezeichnung and "ohne Einlegeteil" not in artikelbezeichnung
-        
-        if is_einlegeteil:
-            # IMPORTANT: Einlegeteil articles in the D-Kugelhahn context must also respect
-            # HVB compatibility (and KH-HVB if present), same as other D-Kugelhahn items.
-            if entry.et_hvb and not check_compatibility(entry.et_hvb, hvb_size, probe_size, "hvb"):
-                print(f"DEBUG: D-Kugelhahn Einlegeteil {entry.artikelnummer} filtered out by et_hvb compatibility")
-                continue
-            if entry.kh_hvb and not check_compatibility(entry.kh_hvb, hvb_size, probe_size, "hvb"):
-                print(f"DEBUG: D-Kugelhahn Einlegeteil {entry.artikelnummer} filtered out by kh_hvb compatibility")
-                continue
-            
-            # Check if formula already contains *2 (like line 2001167)
-            has_multiply_2 = entry.menge_formel and "*2" in entry.menge_formel
-            
-            # If formula already has *2, use it as-is
-            if has_multiply_2:
-                add_entry(entry)
-            else:
-                # Override to sondenanzahl * 2 (for HVB and probes)
-                quantity = calculate_formula("=sondenanzahl*2", context)
-                if quantity and quantity > 0:
-                    items.append({
-                        "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                        "artikelbezeichnung": entry.artikelbezeichnung,
-                        "menge": _decimal(quantity),
-                        "source_table": "D-Kugelhahn",
-                    })
-            continue  # Skip other checks for Einlegeteil items
-        
-        # Special handling for Einschweißteil items based on business rules (same as regular Kugelhahn)
-        if is_einschweiss:
-            # 1. GN Einschweißteil DA 63 mm (2001179)
-            #    - Used ONLY for HVB
-            #    - Only when HVB = 63mm (ET-HVB = DA 63)
-            #    - Quantity = sondenanzahl (override static 1.0)
-            #    - Already handled above for all D-Kugelhahn types when HVB = 63mm
-            if article_da_size == "63":
-                # Skip if already added in special case above (when HVB = 63mm)
-                if hvb_size == "63":
-                    continue
-                # Otherwise, check ET-HVB compatibility (should be DA 63)
-                if entry.et_hvb and check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
-                    # Override static quantity to sondenanzahl
-                    quantity = calculate_formula("=sondenanzahl", context)
-                    if quantity and quantity > 0:
-                        items.append({
-                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                            "artikelbezeichnung": entry.artikelbezeichnung,
-                            "menge": _decimal(quantity),
-                            "source_table": "D-Kugelhahn",
-                        })
-                continue  # Skip other checks for DA 63 Einschweißteil
-            
-            # 2. GN Einschweißteil DA 40 mm (2001177)
-            #    - Used ONLY for Sonden (probes)
-            #    - NEVER for HVB (no ET-HVB field)
-            #    - Used when probe = DA 40 or 50mm (ET-Sonden = DA 40|DA 50)
-            #    - Quantity = sondenanzahl (already in formula)
-            if article_da_size == "40":
-                # Check ET-Sonden compatibility (should be DA 40|DA 50)
-                # Only include if ET-Sonden matches (never for HVB)
-                if entry.et_sonden and check_compatibility(entry.et_sonden, hvb_size, probe_size, 'sonden'):
-                    add_entry(entry)
-                continue  # Skip other checks for DA 40 Einschweißteil
-            
-            # 3. GN Einschweißteil DA 32 mm (2001178)
-            #    - Used for BOTH HVB and Sonden
-            #    - HVB: Used for every HVB which is NOT 63mm (KH-HVB field indicates HVB use)
-            #    - Sonden: Used if probes are DA 32mm
-            #    - Quantity = sondenanzahl (override formula =2)
-            #    - Exception: If D-Kugelhahn DA size is 40 (e.g., DN 32 / DA 40), we do NOT need Sonden version
-            #      This is future-proof: any D-Kugelhahn with DA 40 will skip DA 32 Einschweißteil (Sonden)
-            if article_da_size == "32":
-                # Check if used for HVB: KH-HVB field exists (indicates HVB use) and HVB is NOT 63mm
-                # Requirement: "always used for every HVB which is not 63 mm"
-                if entry.kh_hvb and entry.kh_hvb.strip() and hvb_size != "63":
-                    # Override quantity to sondenanzahl
-                    quantity = calculate_formula("=sondenanzahl", context)
-                    if quantity and quantity > 0:
-                        items.append({
-                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                            "artikelbezeichnung": entry.artikelbezeichnung + " (HVB)",
-                            "menge": _decimal(quantity),
-                            "source_table": "D-Kugelhahn",
-                        })
-                
-                # Check if used for Sonden: probe is DA 32mm
-                # Requirement: "always used if somebody selected probes with DA 32 mm"
-                # Exception: "If this ball valve is selected, we do not need 'Sonden' (probes) in DA 32 mm"
-                # Future-proof: Skip Sonden version if D-Kugelhahn DA size is 40 (works for DN 32 / DA 40 and future DA 40 types)
-                dfm_kugelhahn_da = _extract_da_from_kugelhahn_type(dfm_kugelhahn_type)
-                if probe_size == "32" and dfm_kugelhahn_da != "40":
-                    # Override quantity to sondenanzahl
-                    quantity = calculate_formula("=sondenanzahl", context)
-                    if quantity and quantity > 0:
-                        items.append({
-                            "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                            "artikelbezeichnung": entry.artikelbezeichnung + " (Sonden)",
-                            "menge": _decimal(quantity),
-                            "source_table": "D-Kugelhahn",
-                        })
-                continue  # Skip other checks for DA 32 Einschweißteil
-        
-        # Smart detection for Heizdorn-Reduktion items
-        # Rule: "The quantity is the same as number of probes" (sondenanzahl)
-        # Example: If DN 32 / DA 40 and probe = 50mm, include Heizdorn-Reduktion DA 50 / 40
-        is_heizdorn = "Heizdorn" in artikelbezeichnung or "Heizdorn-Reduktion" in artikelbezeichnung
-        
-        if is_heizdorn:
-            # Check ET-Sonden compatibility (should match probe size)
-            if entry.et_sonden and check_compatibility(entry.et_sonden, hvb_size, probe_size, 'sonden'):
-                # Override to sondenanzahl (ignore static value)
-                quantity = calculate_formula("=sondenanzahl", context)
-                if quantity and quantity > 0:
-                    items.append({
-                        "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                        "artikelbezeichnung": entry.artikelbezeichnung,
-                        "menge": _decimal(quantity),
-                        "source_table": "D-Kugelhahn",
-                    })
-            continue  # Skip other checks for Heizdorn-Reduktion items
-        
-        # For non-Einschweißteil items, filter by DA size mismatch first
-        if article_da_size and article_da_size != da_value:
-            print(f"DEBUG: Entry {entry.artikelnummer} filtered out - DA size mismatch: article is DA {article_da_size}, expected DA {da_value}")
-            continue
-        
-        # For D-Kugelhahn items, we're more lenient with compatibility checks
-        # since they're selected independently from DFM category
-        # Only check HVB compatibility strictly, sonden compatibility is optional
-        if entry.et_hvb and not check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
-            print(f"DEBUG: Entry {entry.artikelnummer} filtered out by et_hvb compatibility")
-            continue
-        # Skip sonden compatibility check for D-Kugelhahn - user explicitly selected this type
-        # if entry.et_sonden and not check_compatibility(entry.et_sonden, hvb_size, probe_size, 'sonden'):
-        #     print(f"DEBUG: Entry {entry.artikelnummer} filtered out by et_sonden compatibility")
-        #     continue
-        if entry.kh_hvb and not check_compatibility(entry.kh_hvb, hvb_size, probe_size, 'hvb'):
-            print(f"DEBUG: Entry {entry.artikelnummer} filtered out by kh_hvb compatibility")
-            continue
-        print(f"DEBUG: Adding D-Kugelhahn entry: {entry.artikelnummer} - {entry.artikelbezeichnung}")
-        add_entry(entry)
 
-    print(f"DEBUG build_dfm_kugelhahn_components: Returning {len(items)} items")
+        import re
+        da_match = re.search(r"DA\s+(\d{2,3})\s*mm", artikelbezeichnung, re.IGNORECASE)
+        article_da_size = da_match.group(1) if da_match else None
+
+        # Generic DA filter ONLY for non-Einschweißteil items
+        if not is_einschweiss and da_value and article_da_size and article_da_size != da_value:
+            continue
+
+        # Respect CSV compatibility fields
+        if entry.et_hvb and not check_compatibility(entry.et_hvb, hvb_size, probe_size, "hvb"):
+            continue
+        if entry.et_sonden and not check_compatibility(entry.et_sonden, hvb_size, probe_size, "sonden"):
+            continue
+        if entry.kh_hvb and not check_compatibility(entry.kh_hvb, hvb_size, probe_size, "hvb"):
+            continue
+
+        quantity = None
+        if entry.menge_formel:
+            quantity = calculate_formula(entry.menge_formel, context)
+        elif entry.menge_statisch is not None:
+            quantity = entry.menge_statisch
+
+        if quantity is None or quantity <= 0:
+            continue
+
+        items.append(
+            {
+                "artikelnummer": format_artikelnummer(entry.artikelnummer),
+                "artikelbezeichnung": artikelbezeichnung,
+                "menge": _decimal(quantity),
+                "source_table": "D-Kugelhahn",
+            }
+        )
+
     return items
 
 
