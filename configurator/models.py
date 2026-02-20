@@ -82,6 +82,20 @@ class SondenDurchmesser(models.Model):
         ordering = ['schachttyp', 'durchmesser']
 
 
+class SondenDurchmesserPipe(models.Model):
+    """Pipe articles for probe diameters from Sonden-Durchmesser.csv"""
+    durchmesser = models.CharField(max_length=10, unique=True)  # Probe diameter in mm (e.g., "25", "32", "50")
+    artikelnummer = models.CharField(max_length=50)
+    artikelbezeichnung = models.CharField(max_length=200)
+    
+    def __str__(self):
+        return f"{self.durchmesser}mm - {self.artikelnummer}"
+    
+    class Meta:
+        verbose_name_plural = "Sonden Durchmesser Pipes"
+        ordering = ['durchmesser']
+
+
 class Sondenabstand(models.Model):
     """Probe distances from Sondenabstaende.csv"""
     sondenabstand = models.IntegerField()

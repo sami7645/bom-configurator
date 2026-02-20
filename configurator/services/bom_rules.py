@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Dict, List
 
 from django.db.models import Q
@@ -12,6 +12,7 @@ from ..models import (
     HVBStuetze,
     WPVerschlusskappe,
     WPA,
+    SondenDurchmesserPipe,
 )
 from ..utils import calculate_formula, check_compatibility, format_artikelnummer
 
@@ -48,14 +49,11 @@ def _compatibility_match(compat_value: str, hvb_size: str, sonden_durchmesser: s
 
 
 def build_sondenverschlusskappen(config, context) -> List[Dict]:
-    """Sondenverschlusskappe (probe closure caps) - TWO separate items:
-    1. HVB Sondenverschlusskappe: 2 pieces based on HVB size
-    2. Probe Sondenverschlusskappe: sondenanzahl * 2 pieces based on probe diameter
+    """Sondenverschlusskappe (probe closure caps) - for probe pipe ends only.
     
     Business rules:
-    - HVB: Always 2 pieces, selected by HVB size (for HVB 63mm, use DA 110)
     - Probes: sondenanzahl * 2 pieces, selected by probe diameter (sonden_durchmesser)
-    - These are TWO SEPARATE items in the BOM
+    - Note: HVB closure caps are handled separately by build_stumpfschweiss_endkappen
     """
     items: List[Dict] = []
     
@@ -64,39 +62,7 @@ def build_sondenverschlusskappen(config, context) -> List[Dict]:
         sondenanzahl = config.sondenanzahl or 0
     
     # ============================================
-    # 1. HVB Sondenverschlusskappe (always 2 pieces)
-    # ============================================
-    hvb_size = str(config.hvb_size or "").strip()
-    if hvb_size:
-        # Remove 'mm' suffix if present
-        if hvb_size.lower().endswith('mm'):
-            hvb_size = hvb_size[:-2].strip()
-        
-        # Business rule: For HVB 63mm, use DA 110 Sondenverschlusskappe
-        # For other HVB sizes, match by HVB size
-        if hvb_size == "63":
-            target_da_size = "110"
-        else:
-            target_da_size = hvb_size
-        
-        # Find Sondenverschlusskappe that matches the target DA size for HVB
-        hvb_cap = Sondenverschlusskappe.objects.filter(
-            sonden_durchmesser__iexact=target_da_size
-        ).first()
-        
-        if hvb_cap:
-            items.append(
-                {
-                    "artikelnummer": format_artikelnummer(hvb_cap.artikelnummer),
-                    "artikelbezeichnung": f"{hvb_cap.artikelbezeichnung} (HVB)",
-                    "menge": _decimal("2"),  # Always 2 pieces for HVB
-                    "source_table": "Sondenverschlusskappe",
-                    "is_finalized": True,  # Mark as finalized
-                }
-            )
-    
-    # ============================================
-    # 2. Probe Sondenverschlusskappe (sondenanzahl * 2 pieces)
+    # Probe Sondenverschlusskappe (sondenanzahl * 2 pieces)
     # ============================================
     sonden_durchmesser = str(config.sonden_durchmesser or "").strip()
     if sonden_durchmesser and sondenanzahl > 0:
@@ -116,7 +82,7 @@ def build_sondenverschlusskappen(config, context) -> List[Dict]:
             items.append(
                 {
                     "artikelnummer": format_artikelnummer(probe_cap.artikelnummer),
-                    "artikelbezeichnung": f"{probe_cap.artikelbezeichnung} (Sonden)",
+                    "artikelbezeichnung": probe_cap.artikelbezeichnung,
                     "menge": _decimal(str(probe_quantity)),
                     "source_table": "Sondenverschlusskappe",
                     "is_finalized": True,  # Mark as finalized
@@ -316,20 +282,73 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
     for entry in dfm_entries:
         if not entry.artikelnummer:
             continue
-        if entry.et_hvb and not check_compatibility(entry.et_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
+        
+        # ET-Sonden compatibility check (probe diameter)
+        # For most parts (e.g. Übergangsstutzen, Heizdorn-Reduktion, brass fittings),
+        # ET-Sonden is a hard compatibility constraint and must match the selected
+        # probe diameter.
+        #
+        # For GN Einschweißteil articles with explicit HVB compatibility (ET-HVB),
+        # the DA value in ET-Sonden describes the branch size (e.g. DA 32) rather
+        # than the probe diameter, so we rely on HVB compatibility instead and do
+        # NOT filter by probe diameter here.
+        enforce_sonden_compat = bool(entry.et_sonden)
+        beschreibung = (entry.artikelbezeichnung or "").lower()
+        if "einschweißteil" in beschreibung and entry.et_hvb:
+            enforce_sonden_compat = False
+        
+        if enforce_sonden_compat and not check_compatibility(entry.et_sonden, config.hvb_size, config.sonden_durchmesser, 'sonden'):
             continue
-        if entry.et_sonden and not check_compatibility(entry.et_sonden, config.hvb_size, config.sonden_durchmesser, 'sonden'):
-            continue
-        if entry.dfm_hvb and not check_compatibility(entry.dfm_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
-            continue
+        
+        # DFM-HVB compatibility check (HVB size for brass flowmeters)
+        # For brass flowmeters, dfm_hvb contains HVB sizes that are compatible
+        # If dfm_hvb is empty but et_hvb contains HVB sizes (like "DA 63|DA 75|..."), use et_hvb for HVB check
+        hvb_checked = False
+        if entry.dfm_hvb:
+            if not check_compatibility(entry.dfm_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
+                continue
+            hvb_checked = True
+        elif entry.et_hvb:
+            # For brass flowmeters, et_hvb may contain HVB compatibility list (e.g., "DA 63|DA 75|...")
+            # Check if et_hvb contains pipe sizes (DA values) - if so, use it for HVB compatibility
+            if 'DA' in entry.et_hvb and '|' in entry.et_hvb:
+                # This looks like an HVB compatibility list, check it
+                if not check_compatibility(entry.et_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
+                    continue
+                hvb_checked = True
+        
+        # ET-HVB compatibility check (for Entlüftung components) - only if not already checked above
+        # Skip this check if we already used et_hvb for HVB compatibility above
+        if not hvb_checked and entry.et_hvb and not ('DA' in entry.et_hvb and '|' in entry.et_hvb):
+            if not check_compatibility(entry.et_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
+                continue
 
         # Calculate quantity: use formula if available, otherwise static value
-        quantity = entry.menge_statisch
+        quantity = None
         if entry.menge_formel:
+            # Prioritize Menge Formel if it exists
             quantity = calculate_formula(entry.menge_formel, context)
-        elif not entry.menge_formel and entry.menge_statisch:
-            # If DFM has only static value but no formula, check if same article
-            # exists in Kugelhahn with a formula - if so, use that formula instead
+        elif entry.menge_statisch:
+            # If Menge Formel is empty, check Menge Statisch
+            # Menge Statisch might be a decimal value or a formula string
+            if isinstance(entry.menge_statisch, Decimal):
+                # It's a static decimal value
+                quantity = entry.menge_statisch
+            else:
+                # It might be a formula string (e.g., "=sondenanzahl (for all HVB diameteres)")
+                menge_statisch_str = str(entry.menge_statisch).strip()
+                if menge_statisch_str.startswith('=') or any(keyword in menge_statisch_str.lower() for keyword in ['sondenanzahl', 'sondenabstand', 'zuschlag']):
+                    # It's a formula, try to calculate it
+                    quantity = calculate_formula(menge_statisch_str, context)
+                else:
+                    # Try to parse as decimal
+                    try:
+                        quantity = Decimal(str(entry.menge_statisch).replace(',', '.'))
+                    except (ValueError, InvalidOperation):
+                        quantity = None
+        
+        # If still no quantity, check if same article exists in Kugelhahn with a formula
+        if quantity is None:
             artikelnummer = format_artikelnummer(entry.artikelnummer)
             if artikelnummer in kugelhahn_formula_map:
                 formula = kugelhahn_formula_map[artikelnummer]

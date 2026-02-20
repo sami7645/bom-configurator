@@ -1052,6 +1052,34 @@ def generate_bom(request):
                 print(f"DEBUG BOMItem created: Menge={bom_item.menge}, Type={type(bom_item.menge)}, String={str(bom_item.menge)}")
                 bom_items.append(bom_item)
         
+        # Fallback: If no match found in Sondengroesse (or match has no artikelnummer), use Sonden-Durchmesser.csv pipe articles
+        if not best_match or not best_match.artikelnummer:
+            from .models import SondenDurchmesserPipe
+            sonden_durchmesser_clean = str(config.sonden_durchmesser or "").strip()
+            if sonden_durchmesser_clean:
+                # Remove 'mm' suffix if present
+                if sonden_durchmesser_clean.lower().endswith('mm'):
+                    sonden_durchmesser_clean = sonden_durchmesser_clean[:-2].strip()
+                
+                pipe = SondenDurchmesserPipe.objects.filter(durchmesser=sonden_durchmesser_clean).first()
+                if pipe and pipe.artikelnummer:
+                    # Calculate quantity: use sondenanzahl * default length per probe
+                    # Default: assume 0.5m per probe (vorlauf + ruecklauf combined)
+                    sondenanzahl = config.sondenanzahl or 0
+                    if sondenanzahl > 0:
+                        default_length_per_probe = Decimal('0.5')  # meters
+                        total_qty = default_length_per_probe * Decimal(str(sondenanzahl))
+                        
+                        if total_qty > 0:
+                            bom_item = BOMItem.objects.create(
+                                configuration=config,
+                                artikelnummer=format_artikelnummer(pipe.artikelnummer),
+                                artikelbezeichnung=pipe.artikelbezeichnung,
+                                menge=total_qty,
+                                source_table='Sonden-Durchmesser'
+                            )
+                            bom_items.append(bom_item)
+        
         # Handle GN X chamber articles if applicable
         if config.schachttyp in ['GN X1', 'GN X2', 'GN X3', 'GN X4']:
             # Build set of valid article numbers from all product tables

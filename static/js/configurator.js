@@ -304,8 +304,8 @@ function getStepSummary(stepNumber) {
 }
 
 function updateStepSummary(step) {
-    // Only show summary for steps 2 and 3 (not step 4)
-    if (step < 2 || step > 3) return;
+    // Only show summary for steps 2, 3, and 4
+    if (step < 2 || step > 4) return;
     
     if (step === 2) {
         // Step 2: Show only Step 1 summary
@@ -354,6 +354,53 @@ function updateStepSummary(step) {
             $step2Container.closest('.summary-section').removeClass('d-none');
         } else if ($step2Container.length && step2Summary.length === 0) {
             $step2Container.closest('.summary-section').addClass('d-none');
+        }
+    } else if (step === 4) {
+        // Step 4: Show Step 1, Step 2, and Step 3 summaries in three columns
+        const step1Summary = getStepSummary(1);
+        const step2Summary = getStepSummary(2);
+        const step3Summary = getStepSummary(3);
+        
+        // Update Step 1 summary (first column)
+        const $step1Container = $(`#config-step-${step} .step-1-summary`);
+        if ($step1Container.length && step1Summary.length > 0) {
+            let html = '<div class="table-responsive"><table class="table table-sm table-borderless" style="width: auto;"><tbody>';
+            step1Summary.forEach(function(row) {
+                html += `<tr><td><strong>${row[0]}:</strong></td><td>${row[1]}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+            $step1Container.html(html);
+            $step1Container.closest('.summary-section').removeClass('d-none');
+        } else if ($step1Container.length && step1Summary.length === 0) {
+            $step1Container.closest('.summary-section').addClass('d-none');
+        }
+        
+        // Update Step 2 summary (second column)
+        const $step2Container = $(`#config-step-${step} .step-2-summary`);
+        if ($step2Container.length && step2Summary.length > 0) {
+            let html = '<div class="table-responsive"><table class="table table-sm table-borderless" style="width: auto;"><tbody>';
+            step2Summary.forEach(function(row) {
+                html += `<tr><td><strong>${row[0]}:</strong></td><td>${row[1]}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+            $step2Container.html(html);
+            $step2Container.closest('.summary-section').removeClass('d-none');
+        } else if ($step2Container.length && step2Summary.length === 0) {
+            $step2Container.closest('.summary-section').addClass('d-none');
+        }
+        
+        // Update Step 3 summary (third column)
+        const $step3Container = $(`#config-step-${step} .step-3-summary`);
+        if ($step3Container.length && step3Summary.length > 0) {
+            let html = '<div class="table-responsive"><table class="table table-sm table-borderless" style="width: auto;"><tbody>';
+            step3Summary.forEach(function(row) {
+                html += `<tr><td><strong>${row[0]}:</strong></td><td>${row[1]}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+            $step3Container.html(html);
+            $step3Container.closest('.summary-section').removeClass('d-none');
+        } else if ($step3Container.length && step3Summary.length === 0) {
+            $step3Container.closest('.summary-section').addClass('d-none');
         }
     }
 }
@@ -457,7 +504,11 @@ function nextStep(step) {
         saveStepData(1);
         saveStepData(2);
         saveStepData(3);
-        checkConfiguration();
+        // Update summaries after data is saved
+        setTimeout(function() {
+            updateStepSummary(4);
+            checkConfiguration();
+        }, 100);
     }
     
     // Scroll to top
@@ -1538,9 +1589,6 @@ function checkConfiguration() {
         zuschlag_rechts: $('#zuschlagRechts').val()
     };
     
-    // Show configuration summary
-    showConfigurationSummary();
-    
     // Check for existing configurations
     $.ajax({
         url: '/api/check-configuration/',
@@ -1549,7 +1597,6 @@ function checkConfiguration() {
         contentType: 'application/json',
         success: function(data) {
             $('#configurationCheck').addClass('d-none');
-            $('#configurationSummary').removeClass('d-none');
             $('#articleNumberSection').removeClass('d-none');
             
             showArticleNumberStatus(data);

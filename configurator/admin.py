@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    CSVDataSource, Schacht, HVB, Sondengroesse, Sondenabstand, SondenDurchmesser,
+    CSVDataSource, Schacht, HVB, Sondengroesse, Sondenabstand, SondenDurchmesser, SondenDurchmesserPipe,
     Kugelhahn, DFM, Entlueftung, Sondenverschlusskappe,
     StumpfschweissEndkappe, WPVerschlusskappe, WPA, Verrohrung,
     Schachtgrenze, Schachtkompatibilitaet, BOMConfiguration,
@@ -42,6 +42,13 @@ class SondenDurchmesserAdmin(admin.ModelAdmin):
     search_fields = ['schachttyp', 'durchmesser']
     list_filter = ['schachttyp']
     ordering = ['schachttyp', 'durchmesser']
+
+
+@admin.register(SondenDurchmesserPipe)
+class SondenDurchmesserPipeAdmin(admin.ModelAdmin):
+    list_display = ['durchmesser', 'artikelnummer', 'artikelbezeichnung']
+    search_fields = ['durchmesser', 'artikelnummer', 'artikelbezeichnung']
+    ordering = ['durchmesser']
 
 
 @admin.register(Sondenabstand)

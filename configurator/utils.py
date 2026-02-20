@@ -115,6 +115,48 @@ def calculate_formula(formula, context):
             value = context[key]
             pattern = r'\b' + re.escape(key) + r'\b'
             safe_formula = re.sub(pattern, str(value), safe_formula)
+        
+        # Many CSV formulas contain human-readable comments after the actual
+        # expression (e.g. "sondenanzahl*2 (if probe is 32 mm ...)").
+        # We only want to evaluate the leading numeric expression and ignore
+        # any trailing descriptive text.
+        # Find the first opening parenthesis and check if it's balanced
+        paren_pos = safe_formula.find('(')
+        if paren_pos >= 0:
+            # Check if parentheses are balanced from this point
+            paren_count = 0
+            balanced = True
+            for i in range(paren_pos, len(safe_formula)):
+                if safe_formula[i] == '(':
+                    paren_count += 1
+                elif safe_formula[i] == ')':
+                    paren_count -= 1
+                    if paren_count == 0:
+                        # Found matching closing paren, include the full expression
+                        break
+            else:
+                # No matching closing paren found - truncate before the opening paren
+                if paren_count > 0:
+                    safe_formula = safe_formula[:paren_pos].strip()
+        
+        # Extract only the numeric expression part (numbers, operators, spaces, balanced parens)
+        # Match from start: numbers, operators, spaces, and balanced parentheses
+        match = re.match(r'[0-9+\-*/().\s]+', safe_formula)
+        if not match:
+            return None
+
+        safe_formula = match.group(0).strip()
+        if not safe_formula:
+            return None
+
+        # Verify parentheses are balanced before eval
+        if safe_formula.count('(') != safe_formula.count(')'):
+            # Unbalanced parentheses - extract only the part before the first unclosed paren
+            paren_pos = safe_formula.find('(')
+            if paren_pos >= 0:
+                safe_formula = safe_formula[:paren_pos].strip()
+            if not safe_formula:
+                return None
 
         allowed_chars = set('0123456789+-*/.() ')
         if not all(c in allowed_chars for c in safe_formula):
@@ -132,8 +174,17 @@ def check_compatibility(compatibility_field, hvb_size, sonden_durchmesser, check
     if not compatibility_field or not compatibility_field.strip():
         return True
 
-    hvb_formatted = f"DA {hvb_size}" if hvb_size else ''
-    sonden_formatted = f"DA {sonden_durchmesser}" if sonden_durchmesser else ''
+    # Strip 'mm' suffix if present from both HVB and probe diameter
+    hvb_clean = str(hvb_size).strip()
+    if hvb_clean.lower().endswith('mm'):
+        hvb_clean = hvb_clean[:-2].strip()
+    
+    sonden_clean = str(sonden_durchmesser).strip()
+    if sonden_clean.lower().endswith('mm'):
+        sonden_clean = sonden_clean[:-2].strip()
+
+    hvb_formatted = f"DA {hvb_clean}" if hvb_clean else ''
+    sonden_formatted = f"DA {sonden_clean}" if sonden_clean else ''
     compatible_values = [value.strip() for value in compatibility_field.split('|')]
 
     if check_type == 'hvb':

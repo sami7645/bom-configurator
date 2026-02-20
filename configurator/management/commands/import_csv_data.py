@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from configurator.models import (
-    Schacht, HVB, Sondengroesse, Sondenabstand, SondenDurchmesser, Kugelhahn, DFM,
+    Schacht, HVB, Sondengroesse, Sondenabstand, SondenDurchmesser, SondenDurchmesserPipe, Kugelhahn, DFM,
     Entlueftung, Sondenverschlusskappe, StumpfschweissEndkappe,
     WPVerschlusskappe, WPA, Verrohrung, Schachtgrenze,
     Schachtkompatibilitaet, CSVDataSource, GNXChamberArticle, HVBStuetze
@@ -41,6 +41,7 @@ class Command(BaseCommand):
             'HVB.csv': self.import_hvb,
             'Sondengroesse - Sondenlaenge.csv': self.import_sondengroesse,
             'Schacht-Sondendurchmesser.csv': self.import_sonden_durchmesser,
+            'Sonden-Durchmesser.csv': self.import_sonden_durchmesser_pipe,
             'Sondenabstaende.csv': self.import_sondenabstand,
             'Kugelhaehne.csv': self.import_kugelhahn,
             'DFM.csv': self.import_dfm,
@@ -100,6 +101,7 @@ class Command(BaseCommand):
                 'HVB.csv': self.import_hvb,
                 'Sondengroesse - Sondenlaenge.csv': self.import_sondengroesse,
                 'Schacht-Sondendurchmesser.csv': self.import_sonden_durchmesser,
+                'Sonden-Durchmesser.csv': self.import_sonden_durchmesser_pipe,
                 'Sondenabstaende.csv': self.import_sondenabstand,
                 'Kugelhaehne.csv': self.import_kugelhahn,
                 'DFM.csv': self.import_dfm,
@@ -293,6 +295,34 @@ class Command(BaseCommand):
                             defaults={}
                         )
                         count += 1
+        
+        return count
+
+    def import_sonden_durchmesser_pipe(self, file_path):
+        """Import pipe articles for probe diameters from Sonden-Durchmesser.csv"""
+        SondenDurchmesserPipe.objects.all().delete()
+        count = 0
+        
+        reader = self.read_csv_file(file_path)
+        for row in reader:
+            row = self.clean_row(row)
+            durchmesser = row.get('Durchmesser Sonde', '').strip()
+            artikelnummer = row.get('Artikelnummer', '').strip()
+            artikelbezeichnung = row.get('Artikelbezeichnung', '').strip()
+            
+            if durchmesser and artikelnummer:
+                # Remove 'mm' suffix if present in durchmesser
+                if durchmesser.lower().endswith('mm'):
+                    durchmesser = durchmesser[:-2].strip()
+                
+                SondenDurchmesserPipe.objects.get_or_create(
+                    durchmesser=durchmesser,
+                    defaults={
+                        'artikelnummer': artikelnummer,
+                        'artikelbezeichnung': artikelbezeichnung
+                    }
+                )
+                count += 1
         
         return count
 
