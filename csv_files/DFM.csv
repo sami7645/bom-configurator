@@ -1,0 +1,71 @@
+﻿Durchflussarmatur,Artikelnummer,Artikelbezeichnung,Menge Statisch,Menge Formel,ET-HVB,ET-Sonden,DFM-HVB
+Plastic Flowmeters,,,,,,,
+K-DFM 2-12 ,2001151,Durchflussarmatur Kunststoff - Durchflussmesser 2-12 l/min - Ohne Einlegeteil,,=sondenanzahl
+K-DFM 2-12 ,2001167,Absperrventil - KST - ZUB - KH32 - Überwurfmutter - SKS,,=sondenanzahl*2
+K-DFM 2-12 ,2001179,GN Einschweißteil - DA 63 mm,,=sondenanzahl,DA 63
+K-DFM 2-12 ,2001177,GN Einschweißteil - DA 40 mm,,=sondenanzahl,,DA 25|DA 40|DA 50
+K-DFM 2-12 ,2001178,GN Einschweißteil - DA 32 mm,,=sondenanzahl,DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355
+K-DFM 2-12 ,2001178,GN Einschweißteil - DA 32 mm,,=sondenanzahl,,DA 32
+K-DFM 2-12 ,8000415,Heizdorn-Reduktion DA 50 / 32,,=sondenanzahl,,DA 50
+K-DFM 2-12 ,8000411,Heizdorn-Reduktion DA 32 / 25,,=sondenanzahl,,DA 25
+K-DFM 8-28,2001150,Durchflussarmatur Kunststoff - Durchflussmesser 8-28 l/min - Ohne Einlegeteil,,=sondenanzahl
+K-DFM 8-28,2001167,Absperrventil - KST - ZUB - KH32 - Überwurfmutter - SKS,,=sondenanzahl*2
+K-DFM 8-28,2001179,GN Einschweißteil - DA 63 mm,,=sondenanzahl,DA 63
+K-DFM 8-28,2001177,GN Einschweißteil - DA 40 mm,,=sondenanzahl,,DA 25|DA 40|DA 50
+K-DFM 8-28,2001178,GN Einschweißteil - DA 32 mm,,=sondenanzahl,DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 32
+K-DFM 8-28,2001178,GN Einschweißteil - DA 32 mm, ,=sondenanzahl,,DA 32
+K-DFM 8-28,8000415,Heizdorn-Reduktion DA 50 / 32,,=sondenanzahl,,DA 50
+K-DFM 8-28,8000411,Heizdorn-Reduktion DA 32 / 25,,=sondenanzahl,,DA 25
+K-DFM 5-42,2001148,Durchflussarmatur Kunststoff - Durchflussmesser 5-42 l/min - Ohne Einlegeteil,,=sondenanzahl
+K-DFM 5-42,2001167,Absperrventil - KST - ZUB - KH32 - Überwurfmutter - SKS,,=sondenanzahl*2
+K-DFM 5-42,2001179,GN Einschweißteil - DA 63 mm,,=sondenanzahl,DA 63
+K-DFM 5-42,2001177,GN Einschweißteil - DA 40 mm,,=sondenanzahl,,DA 25|DA 40|DA 50
+K-DFM 5-42,2001178,GN Einschweißteil - DA 32 mm,,=sondenanzahl,DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 32
+K-DFM 5-42,2001178,GN Einschweißteil - DA 32 mm,,=sondenanzahl,,DA 32
+K-DFM 5-42,8000415,Heizdorn-Reduktion DA 50 / 32,,=sondenanzahl,,DA 50
+K-DFM 5-42,8000411,Heizdorn-Reduktion DA 32 / 25,,=sondenanzahl,,DA 25
+K-DFM 35-70,2001152,Durchflussarmatur Kunststoff - Durchflussmesser 35-70 l/min - Ohne Einlegeteil,,=sondenanzahl
+K-DFM 35-70,2001167,Absperrventil - KST - ZUB - KH32 - Überwurfmutter - SKS,,=sondenanzahl*2
+K-DFM 35-70,2001179,GN Einschweißteil - DA 63 mm,,=sondenanzahl,DA 63
+K-DFM 35-70,2001177,GN Einschweißteil - DA 40 mm,,=sondenanzahl,,DA 25|DA 40|DA 50
+K-DFM 35-70,2001178,GN Einschweißteil - DA 32 mm,,=sondenanzahl,DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 32
+K-DFM 35-70,2001178,GN Einschweißteil - DA 32 mm,,=sondenanzahl,,DA 32
+K-DFM 35-70,8000415,Heizdorn-Reduktion DA 50 / 32,,=sondenanzahl,,DA 50
+K-DFM 35-70,8000411,Heizdorn-Reduktion DA 32 / 25,,=sondenanzahl,,DA 25
+Brass Flowmeters,,,,,,,
+HC VTR 20,2000129,Durchflussarmatur - Strangregulierventil DN 20 - Hydrocontrol,,=sondenanzahl
+HC VTR 20,2000045,"Übergangsstutzen Überwurfmutter PE100 DA 25 x 1""",,=sondenanzahl,,DA 25
+HC VTR 20,2000048,"Übergangsstutzen Überwurfmutter PE100 DA 32 x 1""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355
+HC VTR 20,2000048,"Übergangsstutzen Überwurfmutter PE100 DA 32 x 1""",,=sondenanzahl,,DA 32
+HC VTR 20,2000050,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355
+HC VTR 20,2000050,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1""",,=sondenanzahl,,DA 40|DA50
+HC VTR 20,8000415,Heizdorn-Reduktion DA 50 / 32,,=sondenanzahl,,DA 50
+HC VTR 25,2000130,Durchflussarmatur - Strangregulierventil DN 25 - Hydrocontrol,,=sondenanzahl
+HC VTR 25,2000047,"Übergangsstutzen Überwurfmutter PE100 DA 32 x 1 1/4""",,=sondenanzahl,,DA 32
+HC VTR 25,2000049,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1 1/4""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 40
+HC VTR 25,2000766,"Übergangsstutzen Überwurfmutter PE100 DA 50 x 1 1/4""",,=sondenanzahl,,DA 50
+HC VTR 32,2000132,Durchflussarmatur - Strangregulierventil DN 32 - Hydrocontrol,,=sondenanzahl
+HC VTR 32,2000765,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1 1/2""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 40
+HC VTR 32,2000051,"Übergangsstutzen Überwurfmutter PE100 DA 50 x 1 1/2""",,=sondenanzahl,,DA 50
+HC VTR 40,2000133,Durchflussarmatur - Strangregulierventil DN 40 - Hydrocontrol,,=sondenanzahl
+HC VTR 40,2000810,Hydrocontrol VTR - Tüllen mit Außengewinde DN 40,,=sondenanzahl
+HC VTR 40,2000765,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1 1/2""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 40
+HC VTR 40,2000051,"Übergangsstutzen Überwurfmutter PE100 DA 50 x 1 1/2""",,=sondenanzahl,,DA 50
+IMI STAD A 20,2001596,Durchflussarmatur - Strangregulierventil DN 20 - IMI,,=sondenanzahl
+IMI STAD A 20,2000045,"Übergangsstutzen Überwurfmutter PE100 DA 25 x 1""",,=sondenanzahl,,DA 25
+IMI STAD A 20,2000048,"Übergangsstutzen Überwurfmutter PE100 DA 32 x 1""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355
+IMI STAD A 20,2000048,"Übergangsstutzen Überwurfmutter PE100 DA 32 x 1""",,=sondenanzahl,,DA 32
+IMI STAD A 20,2000050,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355
+IMI STAD A 20,2000050,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1""",,=sondenanzahl,,DA 40|DA50
+IMI STAD A 20,8000415,Heizdorn-Reduktion DA 50 / 32,,=sondenanzahl,,DA 50
+IMI STAD A 25,2001267,Durchflussarmatur - Strangregulierventil DN 25 - IMI
+IMI STAD A 25,2000047,"Übergangsstutzen Überwurfmutter PE100 DA 32 x 1 1/4""",,=sondenanzahl,,DA 32
+IMI STAD A 25,2000049,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1 1/4""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 40
+IMI STAD A 25,2000766,"Übergangsstutzen Überwurfmutter PE100 DA 50 x 1 1/4""",,=sondenanzahl,,DA 50
+IMI STAD A 32,2001272,Durchflussarmatur - Strangregulierventil DN 32 - IMI
+IMI STAD A 32,2000765,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1 1/2""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 40
+IMI STAD A 32,2000051,"Übergangsstutzen Überwurfmutter PE100 DA 50 x 1 1/2""",,=sondenanzahl,,DA 50
+IMI TA-Compact P 25,2001738,Durchflussarmatur - Druckunabhängiges Regelventil - DN 25 - IMI
+IMI TA-Compact P 25,2000047,"Übergangsstutzen Überwurfmutter PE100 DA 32 x 1 1/4""",,=sondenanzahl,,DA 32
+IMI TA-Compact P 25,2000049,"Übergangsstutzen Überwurfmutter PE100 DA 40 x 1 1/4""",,=sondenanzahl,DA 63|DA 75|DA 90|DA 110|DA 125|DA 140|DA 160|DA 180|DA 200|DA 225|DA 250|DA 280|DA 315|DA 355,DA 40
+IMI TA-Compact P 25,2000766,"Übergangsstutzen Überwurfmutter PE100 DA 50 x 1 1/4""",,=sondenanzahl,,DA 50

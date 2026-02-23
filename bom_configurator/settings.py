@@ -123,8 +123,10 @@ STATICFILES_DIRS = [
 STATIC_ROOT = str(BASE_DIR / "staticfiles")
 
 # CSV Files Configuration
-# NOTE: All CSVs are now loaded from the `excel_files` directory
-CSV_FILES_DIR = BASE_DIR / "excel_files"
+# CSVs are generated from the master Excel file into csv_files/.
+# To regenerate: python convert_excel_to_csv.py
+# To reload into DB: python manage.py import_csv_data --force
+CSV_FILES_DIR = BASE_DIR / "csv_files"
 
 # Language and Localization
 LANGUAGE_CODE = "de-de"

@@ -372,8 +372,8 @@ def build_wp_components(config, context) -> List[Dict]:
     """Build WP (heat pump connection) components based on HVB and WP diameters.
 
     Uses:
-    - WPA (excel_files/WPA.csv): Stumpfschweiß-Reduktion DA <HVB> / <WP> kurz
-    - WPVerschlusskappe (excel_files/WP-Verschlusskappen.csv): Sondenverschlusskappe DA <WP>
+    - WPA (csv_files/WPA.csv): Stumpfschweiß-Reduktion DA <HVB> / <WP> kurz
+    - WPVerschlusskappe (csv_files/WP-Verschlusskappen.csv): Sondenverschlusskappe DA <WP>
 
     Business rules (from Excel):
     - For each valid combination of HVB diameter and WP diameter:

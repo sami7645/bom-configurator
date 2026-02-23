@@ -1,8 +1,0 @@
-Durchmesser Sonde,Artikelnummer,Artikelbezeichnung,Schachttyp,HVB,Bauform,Sondenanzahl - Min.,Sondenanzahl - Max.,Rücklauf Länge,Vorlauf Länge,(opt.) Vorlauf Formel,(opt.) Rücklauf Formel,Hinweis
-32,2000488,Rohr - PE 100-RC - 32,GN R Nano,63,,2,2,0.154,0.154,,,
-40,2000489,Rohr - PE 100-RC - 40,GN R Nano,63,,2,2,0.154,0.154,,,
-32,2000488,Rohr - PE 100-RC - 32,GN R Kompakt,63,,2,2,0.145,0.245,,,
-40,2000489,Rohr - PE 100-RC - 40,GN R Kompakt,63,,2,2,0.145,0.245,,,
-32,2000488,Rohr - PE 100-RC - 32,GN 1,63,,10,10,0.265,0.365,,,
-40,2000489,Rohr - PE 100-RC - 40,GN X2,140,U,10,44,0.28,0.365,,,
-50,2000490,Rohr - PE 100-RC - 50,GN X2,180,U,10,36,0.233,0.318,,,
