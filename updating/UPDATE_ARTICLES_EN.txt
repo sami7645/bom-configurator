@@ -1,0 +1,73 @@
+How to add, change, or remove articles (English)
+===============================================
+
+1) Where the data lives
+-----------------------
+- Master data is maintained in an Excel file (for example in the folder "main excel").
+- The application itself **only** reads from:
+  - the CSV files in the folder `csv_files`
+  - the database (which is filled from those CSV files).
+
+2) General rules
+----------------
+- Never change the column headers (first row) in Excel or in the CSV files.
+- Only add, edit, or delete **whole rows** under the headers.
+- Always keep article numbers unique within each table.
+
+3) Add a new article (recommended: via Excel)
+--------------------------------------------
+1. Open the master Excel file (for example in the `main excel` folder).
+2. Choose the correct sheet for the article type, for example:
+   - Schacht
+   - HVB
+   - DFM
+   - Kugelhähne
+   - Sondengröße - Sondenlänge
+   - Sonden-Durchmesser
+   - Sondenabstaende
+   - Sondenverschlusskappe
+   - Stumpfschweiß-Endkappen
+   - WP-Verschlusskappen
+   - WPA
+   - Entlüftung
+   - Verrohrung
+3. Go to the bottom of the data and add a new row.
+   - Fill all required columns (article number, name, quantities, compatibility fields, etc.).
+4. Save the Excel file.
+5. Open a terminal in the project folder and run:
+      py manage.py import_csv_data --force
+   This regenerates the CSV files and reloads all data into the database.
+
+4) Change an existing article
+-----------------------------
+1. Open the Excel file and go to the correct sheet.
+2. Find the row with the article number you want to change.
+3. Edit only the cells you need (for example name, quantity formula, compatibility).
+4. Save the Excel file.
+5. Run in the terminal:
+      py manage.py import_csv_data --force
+
+5) Remove an article
+--------------------
+1. Open the Excel file and go to the correct sheet.
+2. Select the whole row of the article you want to remove.
+3. Delete the row.
+4. Save the Excel file.
+5. Run in the terminal:
+      py manage.py import_csv_data --force
+
+6) Advanced option: edit a single CSV only
+-----------------------------------------
+If you really want to work directly on one CSV file (not recommended for normal users):
+
+1. Open the file from the `csv_files` folder.
+2. Edit rows under the header (same rules as above: no changes to column headers).
+3. Save the CSV.
+4. Re-import only that file, for example:
+      py manage.py import_csv_data --file DFM.csv --force
+
+7) How to verify that it worked
+-------------------------------
+- The import command prints how many records were imported per file.
+- If there is a problem (for example wrong column count), it will show an error message and **no data is changed** for that file.
+

@@ -1,0 +1,107 @@
+How to add or change articles
+
+1) Where the data lives
+   - Master Excel file: 26.02.10 - Stammdaten_Regelwerk_Lookups_Einzelteile_V3.xlsx
+   - Working CSV files used by the app: folder csv_files
+
+2) General rules
+   - Never change the column headers (first row) in Excel or CSV.
+   - Only add, edit, or delete complete rows under the headers.
+   - Always keep article numbers unique inside a table.
+
+3) Add a new article
+   1. Open the Excel file 26.02.10 - Stammdaten_Regelwerk_Lookups_Einzelteile_V3.xlsx.
+   2. Choose the correct sheet for the article type, for example:
+      Schacht, HVB, DFM, Kugelhähne, Sondengröße - Sondenlänge, Sonden-Durchmesser, Sondenabstaende, Sondenverschlusskappe, Stumpfschweiß-Endkappen, WP-Verschlusskappen, WPA, Entlüftung, Verrohrung.
+   3. Go to the bottom of the data and add a new row.
+      Fill all needed columns (article number, name, quantities, compatibility fields, etc.).
+   4. Save the Excel file.
+   5. Open a terminal in the project folder and run:
+        python convert_excel_to_csv.py
+        python manage.py import_csv_data --force
+      This regenerates csv_files and reloads all data into the database.
+
+4) Change an existing article
+   1. Open the Excel file and go to the correct sheet.
+   2. Find the row with the article number you want to change.
+   3. Edit only the cells you need (for example name, quantity formula, compatibility).
+   4. Save the Excel file.
+   5. Run in the terminal:
+        python convert_excel_to_csv.py
+        python manage.py import_csv_data --force
+
+5) Remove an article
+   1. Open the Excel file and go to the correct sheet.
+   2. Select the whole row of the article you want to remove.
+   3. Delete the row.
+   4. Save the Excel file.
+   5. Run in the terminal:
+        python convert_excel_to_csv.py
+        python manage.py import_csv_data --force
+
+6) Advanced option: edit a single CSV only
+   If you really want to work directly on one CSV file:
+   1. Open the file from the csv_files folder.
+   2. Edit rows under the header (same rules as above).
+   3. Save the CSV.
+   4. Re-import only that file, for example:
+        python manage.py import_csv_data --file DFM.csv --force
+
+7) How to know it worked
+   - The import command prints how many records were imported per file.
+   - If there is a problem (for example wrong column count), it will show an error message and no data is changed for that file.
+
+
+How to add or change articles
+
+1) Where the data lives
+   - Master Excel file: 26.02.10 - Stammdaten_Regelwerk_Lookups_Einzelteile_V3.xlsx
+   - Working CSV files used by the app: folder csv_files
+
+2) General rules
+   - Never change the column headers (first row) in Excel or CSV.
+   - Only add, edit, or delete complete rows under the headers.
+   - Always keep article numbers unique inside a table.
+
+3) Add a new article
+   1. Open the Excel file 26.02.10 - Stammdaten_Regelwerk_Lookups_Einzelteile_V3.xlsx.
+   2. Choose the correct sheet for the article type, for example:
+      Schacht, HVB, DFM, Kugelhähne, Sondengröße - Sondenlänge, Sonden-Durchmesser, Sondenabstaende, Sondenverschlusskappe, Stumpfschweiß-Endkappen, WP-Verschlusskappen, WPA, Entlüftung, Verrohrung.
+   3. Go to the bottom of the data and add a new row.
+      Fill all needed columns (article number, name, quantities, compatibility fields, etc.).
+   4. Save the Excel file.
+   5. Open a terminal in the project folder and run:
+        python convert_excel_to_csv.py
+        python manage.py import_csv_data --force
+      This regenerates csv_files and reloads all data into the database.
+
+4) Change an existing article
+   1. Open the Excel file and go to the correct sheet.
+   2. Find the row with the article number you want to change.
+   3. Edit only the cells you need (for example name, quantity formula, compatibility).
+   4. Save the Excel file.
+   5. Run in the terminal:
+        python convert_excel_to_csv.py
+        python manage.py import_csv_data --force
+
+5) Remove an article
+   1. Open the Excel file and go to the correct sheet.
+   2. Select the whole row of the article you want to remove.
+   3. Delete the row.
+   4. Save the Excel file.
+   5. Run in the terminal:
+        python convert_excel_to_csv.py
+        python manage.py import_csv_data --force
+
+6) Advanced option: edit a single CSV only
+   If you really want to work directly on one CSV file:
+   1. Open the file from the csv_files folder.
+   2. Edit rows under the header (same rules as above).
+   3. Save the CSV.
+   4. Re-import only that file, for example:
+        python manage.py import_csv_data --file DFM.csv --force
+
+7) How to know it worked
+   - The import command prints how many records were imported per file.
+   - If there is a problem (for example wrong column count), it will show an error message and no data is changed for that file.
+

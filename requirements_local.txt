@@ -1,2 +1,0 @@
-# Minimal requirements for local development
-Django==5.2.7

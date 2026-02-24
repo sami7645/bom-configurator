@@ -1,0 +1,73 @@
+Wie man Artikel hinzufügt, ändert oder entfernt (Deutsch)
+=========================================================
+
+1) Wo die Daten liegen
+----------------------
+- Die Stammdaten werden in einer Excel‑Datei gepflegt (zum Beispiel im Ordner „main excel“).
+- Die Anwendung selbst liest **nur** aus:
+  - den CSV‑Dateien im Ordner `csv_files`
+  - der Datenbank (die aus diesen CSV‑Dateien befüllt wird).
+
+2) Grundregeln
+--------------
+- Die Spaltenüberschriften (erste Zeile) in Excel und CSV dürfen **nicht** geändert oder gelöscht werden.
+- Nur **ganze Zeilen** unterhalb der Kopfzeile hinzufügen, bearbeiten oder löschen.
+- Artikelnummern innerhalb einer Tabelle eindeutig halten (keine doppelten Artikelnummern).
+
+3) Neuen Artikel hinzufügen (empfohlen: über Excel)
+---------------------------------------------------
+1. Excel‑Datei mit den Stammdaten öffnen (z.B. im Ordner `main excel`).
+2. Das passende Tabellenblatt für den Artikeltyp wählen, zum Beispiel:
+   - Schacht
+   - HVB
+   - DFM
+   - Kugelhähne
+   - Sondengröße - Sondenlänge
+   - Sonden-Durchmesser
+   - Sondenabstaende
+   - Sondenverschlusskappe
+   - Stumpfschweiß-Endkappen
+   - WP-Verschlusskappen
+   - WPA
+   - Entlüftung
+   - Verrohrung
+3. Ganz unten in der Tabelle eine neue Zeile einfügen.
+   - Alle benötigten Spalten ausfüllen (Artikelnummer, Bezeichnung, Mengen, Kompatibilitätsfelder usw.).
+4. Excel‑Datei speichern.
+5. Im Projektordner ein Terminal öffnen und ausführen:
+      py manage.py import_csv_data --force
+   Dadurch werden die CSV‑Dateien neu erzeugt und alle Daten erneut in die Datenbank geladen.
+
+4) Vorhandenen Artikel ändern
+-----------------------------
+1. Excel‑Datei öffnen und zum passenden Tabellenblatt wechseln.
+2. Die Zeile mit der gewünschten Artikelnummer suchen.
+3. Nur die benötigten Zellen anpassen (z.B. Bezeichnung, Mengenformel, Kompatibilität).
+4. Excel speichern.
+5. Im Terminal ausführen:
+      py manage.py import_csv_data --force
+
+5) Artikel entfernen
+--------------------
+1. Excel‑Datei öffnen und das richtige Tabellenblatt wählen.
+2. Die komplette Zeile des zu entfernenden Artikels markieren.
+3. Die Zeile löschen.
+4. Excel speichern.
+5. Im Terminal ausführen:
+      py manage.py import_csv_data --force
+
+6) Erweiterte Option: einzelne CSV direkt bearbeiten
+----------------------------------------------------
+Wenn Sie ausnahmsweise direkt in einer CSV‑Datei arbeiten möchten (für normale Nutzer nicht empfohlen):
+
+1. Die gewünschte Datei im Ordner `csv_files` öffnen.
+2. Nur Zeilen unterhalb der Kopfzeile bearbeiten (Spaltenüberschriften nicht ändern).
+3. CSV speichern.
+4. Optional nur diese Datei importieren, zum Beispiel:
+      py manage.py import_csv_data --file DFM.csv --force
+
+7) Prüfen, ob alles funktioniert hat
+------------------------------------
+- Der Import‑Befehl zeigt an, wie viele Datensätze pro Datei importiert wurden.
+- Wenn es ein Problem gibt (z.B. falsche Spaltenanzahl), erscheint eine Fehlermeldung und für diese Datei werden **keine Daten geändert**.
+
