@@ -49,11 +49,12 @@ def _compatibility_match(compat_value: str, hvb_size: str, sonden_durchmesser: s
 
 
 def build_sondenverschlusskappen(config, context) -> List[Dict]:
-    """Sondenverschlusskappe (probe closure caps) - for probe pipe ends only.
+    """Sondenverschlusskappe (closure caps) for probes AND HVB.
     
-    Business rules:
-    - Probes: sondenanzahl * 2 pieces, selected by probe diameter (sonden_durchmesser)
-    - Note: HVB closure caps are handled separately by build_stumpfschweiss_endkappen
+    Business rules (from Excel sheet Sondenverschlusskappe):
+    - The table entries (DA 25, 32, 40, …, 110) are used:
+      - For probes: 2 pieces per probe (sondenanzahl * 2) based on probe diameter.
+      - For HVB: always 2 pieces for the matching HVB diameter.
     """
     items: List[Dict] = []
     
@@ -86,6 +87,30 @@ def build_sondenverschlusskappen(config, context) -> List[Dict]:
                     "menge": _decimal(str(probe_quantity)),
                     "source_table": "Sondenverschlusskappe",
                     "is_finalized": True,  # Mark as finalized
+                }
+            )
+    
+    # ============================================
+    # HVB Sondenverschlusskappe (always 2 pieces)
+    # ============================================
+    hvb_size = str(config.hvb_size or "").strip()
+    if hvb_size.lower().endswith("mm"):
+        hvb_size = hvb_size[:-2].strip()
+    
+    if hvb_size:
+        hvb_cap = Sondenverschlusskappe.objects.filter(
+            sonden_durchmesser__iexact=hvb_size
+        ).first()
+        
+        if hvb_cap:
+            hvb_quantity = 2
+            items.append(
+                {
+                    "artikelnummer": format_artikelnummer(hvb_cap.artikelnummer),
+                    "artikelbezeichnung": hvb_cap.artikelbezeichnung,
+                    "menge": _decimal(str(hvb_quantity)),
+                    "source_table": "Sondenverschlusskappe",
+                    "is_finalized": True,
                 }
             )
     
@@ -208,12 +233,11 @@ def build_entlueftung_components(config, context=None) -> List[Dict]:
         
         artikelnummer = format_artikelnummer(part.artikelnummer)
         
-        # Determine source_table: Kugelhahn articles should be labeled based on Kugelhahn type
-        # Dynamically detect if this is a Kugelhahn article (appears in Kugelhahn table and has "Kugelhahn" in description)
-        if is_kugelhahn_article(part) and kugelhahn_source:
-            source_table = kugelhahn_source
-        else:
-            source_table = "Entlüftung"
+        # Always label these as Entlüftung in the BOM, even if the same
+        # article number also appears in Kugelhahn/DFM tables. This keeps
+        # the ball valves from Kugelhahn and from Entlüftung visible as
+        # separate lines for better overview.
+        source_table = "Entlüftung"
             
         # Use menge_statisch from CSV (as per Entlüftung CSV structure)
         qty = part.menge_statisch or Decimal("1")
