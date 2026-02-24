@@ -260,29 +260,137 @@ def build_manifold_components(config) -> List[Dict]:
 def build_plastic_dfm_components(config, context) -> List[Dict]:
     """Build DFM components (plastic and brass).
 
-    Original behaviour:
-    - Only handled plastic DFM types where dfm_type starts with "K-DFM".
-    - Brass flowmeter selections (e.g. HC VTR, IMI STAD, IMI TA) were ignored.
+    Plastic flowmeters (K-DFM): keep existing behaviour (quantities from
+    formulas/static values and detailed compatibility checks).
 
-    Updated behaviour:
-    - Process ANY selected dfm_type (both plastic and brass), as long as it is
-      not empty.
-    - We still retain the plastic-specific default Kugelhahn mapping
-      (DN 25 / DA 32) only for K-DFM series to keep previous logic intact.
+    Brass flowmeters (HC VTR, IMI STAD, IMI TA-Compact P):
+    - Work purely off the DFM.xlsx rules per flowmeter type.
+    - For the selected flowmeter, probe diameter and HVB size:
+      1) Rows with both probe and HVB (ET-Sonden + ET-HVB/DFM-HVB in the same
+         row) must match **both** the selected probe and HVB.
+      2) Rows with only probe (ET-Sonden) must match the selected probe.
+      3) Rows with only HVB (ET-HVB or DFM-HVB) must match the selected HVB.
+      4) Rows without any probe/HVB information (no ET-Sonden, ET-HVB,
+         or DFM-HVB) are always included whenever the brass flowmeter is
+         selected (these are the “always include” articles).
+    - Quantities for brass rows always come from `Menge Formel` /
+      `Menge Statisch` in DFM.xlsx, evaluated via `calculate_formula`
+      (e.g. `=sondenanzahl`, `=sondenanzahl*2`, etc.). If both are empty
+      on an “always include” row, we fall back to `sondenanzahl`.
     """
     items: List[Dict] = []
-    # If no DFM type selected, nothing to build
     if not config.dfm_type:
         return items
 
-    # Determine kugelhahn_type for checking formulas
+    is_brass = not (config.dfm_type or "").strip().startswith("K-DFM")
+
+    if is_brass:
+        # --- Brass flowmeters: DFM.xlsx-driven logic with probe-first search ---
+        dfm_entries = list(
+            DFM.objects.filter(durchflussarmatur=config.dfm_type)
+        )
+        sondenanzahl = context.get("sondenanzahl", 0) or getattr(config, "sondenanzahl", 0) or 0
+
+        always_indices = []
+        probe_match_indices = []
+        hvb_match_indices = []
+
+        # First pass: classify rows
+        for idx, entry in enumerate(dfm_entries):
+            if not entry.artikelnummer:
+                continue
+
+            has_probe = bool(entry.et_sonden and str(entry.et_sonden).strip())
+            has_hvb = bool(
+                (entry.et_hvb and str(entry.et_hvb).strip())
+                or (entry.dfm_hvb and str(entry.dfm_hvb).strip())
+            )
+
+            if not has_probe and not has_hvb:
+                # Case 3: rows without probe/HVB info – always included for this brass flowmeter.
+                always_indices.append(idx)
+                continue
+
+            # Probe match (ET-Sonden) – strict, must match selected probe
+            if has_probe and check_compatibility(
+                entry.et_sonden, config.hvb_size, config.sonden_durchmesser, "sonden"
+            ):
+                probe_match_indices.append(idx)
+
+            # HVB match – independent from probe; we only check ET-HVB / DFM-HVB
+            hvb_matches = False
+            if entry.et_hvb and check_compatibility(
+                entry.et_hvb, config.hvb_size, config.sonden_durchmesser, "hvb"
+            ):
+                hvb_matches = True
+            if not hvb_matches and entry.dfm_hvb and check_compatibility(
+                entry.dfm_hvb, config.hvb_size, config.sonden_durchmesser, "hvb"
+            ):
+                hvb_matches = True
+
+            if hvb_matches:
+                hvb_match_indices.append(idx)
+
+        # Decide which indices to include based on the probe-first search rule.
+        selected_indices = set(always_indices)
+
+        # Always include all matching probe rows.
+        for idx in probe_match_indices:
+            selected_indices.add(idx)
+
+        # For HVB rows: start searching **below** the first matching probe row.
+        if probe_match_indices:
+            first_probe_index = min(probe_match_indices)
+            for idx in hvb_match_indices:
+                if idx > first_probe_index:
+                    selected_indices.add(idx)
+
+        # Second pass: compute quantities and build items.
+        for idx in sorted(selected_indices):
+            entry = dfm_entries[idx]
+
+            # Quantity from Menge Formel / Menge Statisch
+            quantity = None
+            if entry.menge_formel:
+                quantity = calculate_formula(entry.menge_formel, context)
+            elif entry.menge_statisch:
+                if isinstance(entry.menge_statisch, Decimal):
+                    quantity = entry.menge_statisch
+                else:
+                    menge_statisch_str = str(entry.menge_statisch).strip()
+                    if menge_statisch_str.startswith("=") or any(
+                        k in menge_statisch_str.lower()
+                        for k in ["sondenanzahl", "sondenabstand", "zuschlag"]
+                    ):
+                        quantity = calculate_formula(menge_statisch_str, context)
+                    else:
+                        try:
+                            quantity = Decimal(str(entry.menge_statisch).replace(",", "."))
+                        except (ValueError, InvalidOperation):
+                            quantity = None
+
+            # Fallback for "always include" rows with no Menge defined
+            if quantity is None and idx in always_indices and sondenanzahl:
+                quantity = Decimal(str(sondenanzahl))
+
+            if quantity is None or quantity <= 0:
+                continue
+
+            items.append(
+                {
+                    "artikelnummer": format_artikelnummer(entry.artikelnummer),
+                    "artikelbezeichnung": entry.artikelbezeichnung,
+                    "menge": _decimal(quantity),
+                    "source_table": "DFM",
+                }
+            )
+        return items
+
+    # --- Plastic flowmeters (K-DFM): keep existing logic ---
     kugelhahn_type = config.kugelhahn_type
-    # For plastic DFM (K-DFM) we keep the old default behaviour:
-    # if no Kugelhahn was explicitly chosen, assume DN 25 / DA 32.
-    if not kugelhahn_type and config.dfm_type and config.dfm_type.startswith('K-DFM'):
+    if not kugelhahn_type and config.dfm_type and config.dfm_type.startswith("K-DFM"):
         kugelhahn_type = "DN 25 / DA 32"
 
-    # Build a map of article numbers to their formulas from Kugelhahn
     kugelhahn_formula_map = {}
     if kugelhahn_type:
         hvb_size = str(config.hvb_size)
@@ -291,14 +399,12 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
         for kh_entry in kugelhahn_entries:
             if not kh_entry.artikelnummer:
                 continue
-            # Apply same compatibility checks
-            if kh_entry.et_hvb and not check_compatibility(kh_entry.et_hvb, hvb_size, probe_size, 'hvb'):
+            if kh_entry.et_hvb and not check_compatibility(kh_entry.et_hvb, hvb_size, probe_size, "hvb"):
                 continue
-            if kh_entry.et_sonden and not check_compatibility(kh_entry.et_sonden, hvb_size, probe_size, 'sonden'):
+            if kh_entry.et_sonden and not check_compatibility(kh_entry.et_sonden, hvb_size, probe_size, "sonden"):
                 continue
-            if kh_entry.kh_hvb and not check_compatibility(kh_entry.kh_hvb, hvb_size, probe_size, 'hvb'):
+            if kh_entry.kh_hvb and not check_compatibility(kh_entry.kh_hvb, hvb_size, probe_size, "hvb"):
                 continue
-            # Store formula if it exists
             if kh_entry.menge_formel:
                 kugelhahn_formula_map[format_artikelnummer(kh_entry.artikelnummer)] = kh_entry.menge_formel
 
@@ -306,78 +412,54 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
     for entry in dfm_entries:
         if not entry.artikelnummer:
             continue
-        
-        # ET-Sonden compatibility check (probe diameter)
-        # For most parts (e.g. Übergangsstutzen, Heizdorn-Reduktion, brass fittings),
-        # ET-Sonden is a hard compatibility constraint and must match the selected
-        # probe diameter.
-        #
-        # For GN Einschweißteil articles with explicit HVB compatibility (ET-HVB),
-        # the DA value in ET-Sonden describes the branch size (e.g. DA 32) rather
-        # than the probe diameter, so we rely on HVB compatibility instead and do
-        # NOT filter by probe diameter here.
+
         enforce_sonden_compat = bool(entry.et_sonden)
         beschreibung = (entry.artikelbezeichnung or "").lower()
         if "einschweißteil" in beschreibung and entry.et_hvb:
             enforce_sonden_compat = False
-        
-        if enforce_sonden_compat and not check_compatibility(entry.et_sonden, config.hvb_size, config.sonden_durchmesser, 'sonden'):
+
+        if enforce_sonden_compat and not check_compatibility(
+            entry.et_sonden, config.hvb_size, config.sonden_durchmesser, "sonden"
+        ):
             continue
-        
-        # DFM-HVB compatibility check (HVB size for brass flowmeters)
-        # For brass flowmeters, dfm_hvb contains HVB sizes that are compatible
-        # If dfm_hvb is empty but et_hvb contains HVB sizes (like "DA 63|DA 75|..."), use et_hvb for HVB check
+
         hvb_checked = False
         if entry.dfm_hvb:
-            if not check_compatibility(entry.dfm_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
+            if not check_compatibility(entry.dfm_hvb, config.hvb_size, config.sonden_durchmesser, "hvb"):
                 continue
             hvb_checked = True
-        elif entry.et_hvb:
-            # For brass flowmeters, et_hvb may contain HVB compatibility list (e.g., "DA 63|DA 75|...")
-            # Check if et_hvb contains pipe sizes (DA values) - if so, use it for HVB compatibility
-            if 'DA' in entry.et_hvb and '|' in entry.et_hvb:
-                # This looks like an HVB compatibility list, check it
-                if not check_compatibility(entry.et_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
-                    continue
-                hvb_checked = True
-        
-        # ET-HVB compatibility check (for Entlüftung components) - only if not already checked above
-        # Skip this check if we already used et_hvb for HVB compatibility above
-        if not hvb_checked and entry.et_hvb and not ('DA' in entry.et_hvb and '|' in entry.et_hvb):
-            if not check_compatibility(entry.et_hvb, config.hvb_size, config.sonden_durchmesser, 'hvb'):
+        elif entry.et_hvb and "DA" in entry.et_hvb and "|" in entry.et_hvb:
+            if not check_compatibility(entry.et_hvb, config.hvb_size, config.sonden_durchmesser, "hvb"):
+                continue
+            hvb_checked = True
+
+        if not hvb_checked and entry.et_hvb and not ("DA" in entry.et_hvb and "|" in entry.et_hvb):
+            if not check_compatibility(entry.et_hvb, config.hvb_size, config.sonden_durchmesser, "hvb"):
                 continue
 
-        # Calculate quantity: use formula if available, otherwise static value
         quantity = None
         if entry.menge_formel:
-            # Prioritize Menge Formel if it exists
             quantity = calculate_formula(entry.menge_formel, context)
         elif entry.menge_statisch:
-            # If Menge Formel is empty, check Menge Statisch
-            # Menge Statisch might be a decimal value or a formula string
             if isinstance(entry.menge_statisch, Decimal):
-                # It's a static decimal value
                 quantity = entry.menge_statisch
             else:
-                # It might be a formula string (e.g., "=sondenanzahl (for all HVB diameteres)")
                 menge_statisch_str = str(entry.menge_statisch).strip()
-                if menge_statisch_str.startswith('=') or any(keyword in menge_statisch_str.lower() for keyword in ['sondenanzahl', 'sondenabstand', 'zuschlag']):
-                    # It's a formula, try to calculate it
+                if menge_statisch_str.startswith("=") or any(
+                    k in menge_statisch_str.lower() for k in ["sondenanzahl", "sondenabstand", "zuschlag"]
+                ):
                     quantity = calculate_formula(menge_statisch_str, context)
                 else:
-                    # Try to parse as decimal
                     try:
-                        quantity = Decimal(str(entry.menge_statisch).replace(',', '.'))
+                        quantity = Decimal(str(entry.menge_statisch).replace(",", "."))
                     except (ValueError, InvalidOperation):
                         quantity = None
-        
-        # If still no quantity, check if same article exists in Kugelhahn with a formula
+
         if quantity is None:
-            artikelnummer = format_artikelnummer(entry.artikelnummer)
-            if artikelnummer in kugelhahn_formula_map:
-                formula = kugelhahn_formula_map[artikelnummer]
-                quantity = calculate_formula(formula, context)
-        
+            an = format_artikelnummer(entry.artikelnummer)
+            if an in kugelhahn_formula_map:
+                quantity = calculate_formula(kugelhahn_formula_map[an], context)
+
         if quantity is None:
             continue
 
