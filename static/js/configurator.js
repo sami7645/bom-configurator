@@ -1643,7 +1643,10 @@ function showArticleNumberStatus(data) {
             statusText = 'Bestehende Konfiguration';
             html = `
                 <div class="alert alert-success">
-                    <h6><i class="fas fa-check-circle me-2"></i>Konfiguration bereits vorhanden</h6>
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Konfiguration bereits vorhanden</h6>
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
                     <p>${data.message}</p>
                     <p><strong>Artikelnummer:</strong> <code>${data.article_number}</code></p>
                 </div>
@@ -1656,7 +1659,10 @@ function showArticleNumberStatus(data) {
             statusText = 'Mutterartikel vorhanden';
             html = `
                 <div class="alert alert-warning">
-                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Mutterartikel gefunden</h6>
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Mutterartikel gefunden</h6>
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
                     <p><strong>Mutterartikel:</strong> <code>${data.mother_article_number}</code></p>
                     <p>${data.message}</p>
                     <div class="mb-3">
@@ -1674,10 +1680,13 @@ function showArticleNumberStatus(data) {
         statusClass = 'status-new';
         statusText = 'Neue Konfiguration';
         html = `
-            <div class="alert alert-info">
-                <h6><i class="fas fa-plus-circle me-2"></i>Neue Konfiguration</h6>
-                <p>${data.message}</p>
-                <div class="mb-3">
+            <div class="article-number-panel">
+                <div class="article-number-panel__header">
+                    <h6><i class="fas fa-plus-circle me-2"></i>Neue Konfiguration</h6>
+                    <span class="status-badge ${statusClass}">${statusText}</span>
+                </div>
+                <p class="mb-3">${data.message}</p>
+                <div class="mb-0">
                     <label class="form-label">Neue Artikelnummer:</label>
                     <input type="text" class="form-control" id="newArticleNumber" 
                            placeholder="z.B. 1000089-001" required>
@@ -1685,8 +1694,6 @@ function showArticleNumberStatus(data) {
             </div>
         `;
     }
-    
-    html += `<div class="status-badge ${statusClass}">${statusText}</div>`;
     $('#articleNumberContent').html(html);
 }
 
@@ -1952,10 +1959,9 @@ function showBOMResult(data) {
         const formattedMenge = BOMConfigurator.formatNumber(mengeValue, 3);
         console.log(`DEBUG JS: Formatted: ${formattedMenge}`);
         
-        // Check if item is finalized (should have green background/border)
-        const isFinalized = item.is_finalized === true;
-        const rowClass = isFinalized ? 'table-success' : '';
-        const rowStyle = isFinalized ? 'background-color: #d1e7dd; border: 2px solid #28a745;' : '';
+        // Keep standard table styling (no finalized highlighting)
+        const rowClass = '';
+        const rowStyle = '';
         
         html += `
             <tr class="${rowClass}" style="${rowStyle}">

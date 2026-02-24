@@ -15,7 +15,7 @@
                     <li class="breadcrumb-item active">{{ configuration.name }}</li>
                 </ol>
             </nav>
-            <h2><i class="fas fa-eye me-2"></i>{{ configuration.name }}</h2>
+            <h2>{{ configuration.name }}</h2>
             <p class="text-muted">Erstellt am {{ configuration.created_at|date:"d.m.Y H:i" }}</p>
         </div>
         <div class="col-md-4 text-md-end">
@@ -35,7 +35,7 @@
     <!-- Configuration Details -->
     <div class="row mb-4">
         <div class="col-lg-8">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5><i class="fas fa-info-circle me-2"></i>Konfigurationsdetails</h5>
                 </div>
@@ -99,7 +99,7 @@
         </div>
         
         <div class="col-lg-4">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5><i class="fas fa-barcode me-2"></i>Artikelnummer</h5>
                 </div>
@@ -209,12 +209,7 @@
                             </thead>
                             <tbody>
                                 {% for item in bom_items %}
-                                {% comment %}Mark finalized items: Schacht, HVB, HVB Stütze, and Sondenverschlusskappe are finalized{% endcomment %}
-                                {% if item.source_table == "Schacht" or item.source_table == "HVB" or item.source_table == "HVB Stütze" or item.source_table == "Sondenverschlusskappe" %}
-                                <tr class="table-success bom-item-row" style="background-color: #d1e7dd; border: 2px solid #28a745;">
-                                {% else %}
                                 <tr class="bom-item-row">
-                                {% endif %}
                                     <td class="text-center">{{ forloop.counter }}</td>
                                     <td><code>{{ item.artikelnummer }}</code></td>
                                     <td>{{ item.artikelbezeichnung }}</td>

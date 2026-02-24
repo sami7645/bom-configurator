@@ -1,15 +1,37 @@
-/* Professional Civil Engineer Theme */
+/* GNV Corporate Color Theme */
 
 :root {
-    --primary-color: #2c3e50;
-    --secondary-color: #34495e;
-    --accent-color: #3498db;
+    /* Brand palette (from Farbpalette) */
+    --gnv-primary-blue: #486994;    /* GNV-Blau */
+    --gnv-primary-beige: #FFF2D9;   /* GNV-Beige */
+    --gnv-anthracite: #2E3238;     /* Anthrazit / Dunkelgrau */
+    --gnv-light-grey: #E6E8EB;     /* Hellgrau */
+    --gnv-smokey-blue: #C4D6D7;    /* Smokey Blue */
+    --gnv-muted-blue-grey: #8FB1BE;/* Muted Blue Grey */
+    --gnv-warm-sand: #FFE3BA;      /* Warm Sand */
+
+    /* Semantic aliases (layout + brand) */
+    --primary-color: var(--gnv-primary-blue);
+    --secondary-color: var(--gnv-anthracite);
+    --accent-color: var(--gnv-warm-sand);
+    --light-bg: var(--gnv-light-grey);
+    --border-color: var(--gnv-smokey-blue);
+    --text-muted: var(--gnv-muted-blue-grey);
+
+    /* Functional semantics (keep original vivid feedback colors) */
     --success-color: #27ae60;
     --warning-color: #f39c12;
     --danger-color: #e74c3c;
-    --light-bg: #ecf0f1;
-    --border-color: #bdc3c7;
-    --text-muted: #7f8c8d;
+}
+
+/* Bootstrap overrides for brand colors */
+.bg-primary,
+.navbar.bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.bg-light {
+    background-color: var(--light-bg) !important;
 }
 
 /* Global Styles */
@@ -39,7 +61,7 @@ body {
 }
 
 .card-header {
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    background-color: var(--primary-color);
     color: white;
     border-radius: 12px 12px 0 0 !important;
     padding: 1.25rem;
@@ -71,8 +93,8 @@ body {
 }
 
 .form-control:focus, .form-select:focus {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(72, 105, 148, 0.25); /* #486994 */
 }
 
 .form-control.is-invalid, .form-select.is-invalid {
@@ -94,38 +116,168 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--accent-color), #2980b9);
-    border: none;
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #2980b9, var(--accent-color));
+    background-color: var(--gnv-anthracite);
+    border-color: var(--gnv-anthracite);
     transform: translateY(-1px);
 }
 
+/* Ensure Bootstrap active/pressed states never leak through */
+.btn-primary:focus,
+.btn-primary:focus-visible,
+.btn-primary:active,
+.btn-primary.active,
+.show > .btn-primary.dropdown-toggle,
+.btn-check:checked + .btn-primary,
+.btn-check:active + .btn-primary {
+    background-color: var(--gnv-muted-blue-grey) !important;
+    border-color: var(--gnv-muted-blue-grey) !important;
+    color: #fff !important;
+}
+
+.btn-primary:disabled,
+.btn-primary.disabled {
+    background-color: var(--gnv-muted-blue-grey) !important;
+    border-color: var(--gnv-muted-blue-grey) !important;
+    opacity: 0.65;
+}
+
 .btn-success {
-    background: linear-gradient(135deg, var(--success-color), #229954);
-    border: none;
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
+
+/* Treat "success" buttons as primary CTAs (no green states) */
+.btn-success:hover {
+    background-color: var(--gnv-anthracite) !important;
+    border-color: var(--gnv-anthracite) !important;
+    color: #fff !important;
+}
+
+.btn-success:focus,
+.btn-success:focus-visible,
+.btn-success:active,
+.btn-success.active,
+.show > .btn-success.dropdown-toggle,
+.btn-check:checked + .btn-success,
+.btn-check:active + .btn-success {
+    background-color: var(--gnv-muted-blue-grey) !important;
+    border-color: var(--gnv-muted-blue-grey) !important;
+    color: #fff !important;
+}
+
+.btn-success:disabled,
+.btn-success.disabled {
+    background-color: var(--gnv-muted-blue-grey) !important;
+    border-color: var(--gnv-muted-blue-grey) !important;
+    opacity: 0.65;
+}
+
+/* Article number panel (Step 4) */
+.article-number-panel {
+    background-color: var(--gnv-primary-beige);
+    border: 1px solid var(--gnv-smokey-blue);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.article-number-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.article-number-panel__header h6 {
+    margin: 0;
+    font-weight: 700;
+    color: var(--secondary-color);
+}
+
+.article-number-panel p {
+    margin-bottom: 0.75rem;
 }
 
 .btn-warning {
-    background: linear-gradient(135deg, var(--warning-color), #e67e22);
-    border: none;
+    background-color: var(--warning-color);
+    border-color: var(--warning-color);
+    color: #fff;
 }
 
 .btn-danger {
-    background: linear-gradient(135deg, var(--danger-color), #c0392b);
-    border: none;
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+    color: #fff;
+}
+
+/* Button focus / active states – override Bootstrap defaults */
+.btn:focus,
+.btn:active,
+.btn:focus-visible {
+    box-shadow: 0 0 0 0.2rem rgba(72, 105, 148, 0.35) !important; /* GNV blue glow */
+}
+
+/* Step 4 summary tables should keep section background */
+.summary-section .table,
+.summary-section .table > :not(caption) > * > * {
+    background-color: transparent !important;
 }
 
 .btn-outline-primary {
-    border: 2px solid var(--accent-color);
-    color: var(--accent-color);
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    background-color: transparent;
 }
 
 .btn-outline-primary:hover {
-    background-color: var(--accent-color);
-    border-color: var(--accent-color);
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
+
+/* Outline button pressed/active states (prevent Bootstrap blue) */
+.btn-outline-primary:focus,
+.btn-outline-primary:focus-visible,
+.btn-outline-primary:active,
+.btn-outline-primary.active,
+.show > .btn-outline-primary.dropdown-toggle,
+.btn-check:checked + .btn-outline-primary,
+.btn-check:active + .btn-outline-primary {
+    background-color: var(--gnv-muted-blue-grey) !important;
+    border-color: var(--gnv-muted-blue-grey) !important;
+    color: #fff !important;
+}
+
+.btn-outline-secondary:focus,
+.btn-outline-secondary:focus-visible,
+.btn-outline-secondary:active,
+.btn-outline-secondary.active,
+.show > .btn-outline-secondary.dropdown-toggle,
+.btn-check:checked + .btn-outline-secondary,
+.btn-check:active + .btn-outline-secondary {
+    background-color: var(--gnv-muted-blue-grey) !important;
+    border-color: var(--gnv-muted-blue-grey) !important;
+    color: #fff !important;
+}
+
+.btn-outline-danger:focus,
+.btn-outline-danger:focus-visible,
+.btn-outline-danger:active,
+.btn-outline-danger.active,
+.show > .btn-outline-danger.dropdown-toggle,
+.btn-check:checked + .btn-outline-danger,
+.btn-check:active + .btn-outline-danger {
+    background-color: var(--gnv-muted-blue-grey) !important;
+    border-color: var(--gnv-muted-blue-grey) !important;
+    color: #fff !important;
 }
 
 /* Configuration Grid */
@@ -166,13 +318,13 @@ body {
     left: 0;
     right: 0;
     height: 2px;
-    background-color: var(--border-color);
+    background-color: var(--gnv-smokey-blue);
     z-index: 1;
 }
 
 .step {
-    background: white;
-    border: 3px solid var(--border-color);
+    background: var(--gnv-primary-beige);
+    border: 3px solid var(--gnv-smokey-blue);
     border-radius: 50%;
     width: 40px;
     height: 40px;
@@ -186,23 +338,38 @@ body {
 }
 
 .step.active {
-    border-color: var(--accent-color);
-    background-color: var(--accent-color);
-    color: white;
+    border-color: var(--primary-color);
+    background-color: var(--primary-color);
+    color: #fff;
 }
 
 .step.completed {
-    border-color: var(--success-color);
-    background-color: var(--success-color);
+    border-color: var(--gnv-anthracite);
+    background-color: var(--gnv-anthracite);
     color: white;
 }
 
 /* BOM Table */
 .bom-table {
     background: white;
-    border-radius: 12px;
+    border-radius: 0;
     overflow: hidden;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure small outline buttons (e.g. Export) stay visible on dark headers */
+.card-header .btn-outline-primary {
+    border-color: #fff !important;
+    color: #fff !important;
+}
+
+.card-header .btn-outline-primary:hover,
+.card-header .btn-outline-primary:active,
+.card-header .btn-outline-primary:focus,
+.card-header .btn-outline-primary:focus-visible {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+    border-color: #fff !important;
+    color: #fff !important;
 }
 
 .bom-table table {
@@ -210,7 +377,7 @@ body {
 }
 
 .bom-table th {
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    background-color: var(--primary-color);
     color: white;
     font-weight: 600;
     text-transform: uppercase;
@@ -226,7 +393,7 @@ body {
 }
 
 .bom-table tr:hover {
-    background-color: rgba(52, 152, 219, 0.05);
+    background-color: rgba(72, 105, 148, 0.05); /* primary blue */
 }
 
 /* Status Badges */
@@ -240,18 +407,36 @@ body {
 }
 
 .status-new {
-    background-color: rgba(52, 152, 219, 0.1);
-    color: var(--accent-color);
+    background-color: var(--gnv-primary-beige);
+    color: var(--secondary-color);
 }
 
 .status-existing {
-    background-color: rgba(39, 174, 96, 0.1);
-    color: var(--success-color);
+    background-color: var(--gnv-smokey-blue);
+    color: var(--secondary-color);
 }
 
 .status-mother {
-    background-color: rgba(243, 156, 18, 0.1);
-    color: var(--warning-color);
+    background-color: var(--gnv-warm-sand);
+    color: var(--secondary-color);
+}
+
+/* Generic badges mapped to brand colors */
+.badge.bg-info,
+.badge.text-bg-info {
+    background-color: var(--gnv-smokey-blue) !important;
+    color: var(--secondary-color) !important;
+}
+
+.badge.bg-warning,
+.badge.text-bg-warning {
+    background-color: var(--gnv-warm-sand) !important;
+    color: var(--secondary-color) !important;
+}
+
+.badge.bg-primary,
+.badge.text-bg-primary {
+    background-color: var(--primary-color) !important;
 }
 
 /* Alert Styles */
@@ -263,22 +448,22 @@ body {
 }
 
 .alert-info {
-    background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(52, 152, 219, 0.05));
+    background-color: rgba(52, 152, 219, 0.08);
     border-left: 4px solid var(--accent-color);
 }
 
 .alert-success {
-    background: linear-gradient(135deg, rgba(39, 174, 96, 0.1), rgba(39, 174, 96, 0.05));
+    background-color: rgba(39, 174, 96, 0.08);
     border-left: 4px solid var(--success-color);
 }
 
 .alert-warning {
-    background: linear-gradient(135deg, rgba(243, 156, 18, 0.1), rgba(243, 156, 18, 0.05));
+    background-color: rgba(243, 156, 18, 0.08);
     border-left: 4px solid var(--warning-color);
 }
 
 .alert-danger {
-    background: linear-gradient(135deg, rgba(231, 76, 60, 0.1), rgba(231, 76, 60, 0.05));
+    background-color: rgba(231, 76, 60, 0.08);
     border-left: 4px solid var(--danger-color);
 }
 
@@ -299,7 +484,7 @@ body {
 
 /* GN X Chamber Articles */
 .gnx-articles {
-    background: rgba(52, 152, 219, 0.05);
+    background: rgba(72, 105, 148, 0.05);
     border: 2px dashed var(--accent-color);
     border-radius: 12px;
     padding: 1.5rem;
@@ -357,7 +542,7 @@ body {
 }
 
 .bg-engineering {
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    background-color: var(--primary-color);
     color: white;
 }
 
@@ -366,7 +551,7 @@ body {
 }
 
 .shadow-engineering {
-    box-shadow: 0 8px 25px rgba(44, 62, 80, 0.15);
+    box-shadow: 0 8px 25px rgba(46, 50, 56, 0.15);
 }
 
 /* Animation Classes */
@@ -473,10 +658,10 @@ body {
 }
 
 .summary-section {
-    background-color: rgba(52, 152, 219, 0.05);
+    background-color: var(--gnv-primary-beige);
     padding: 1rem;
     border-radius: 8px;
-    border-left: 3px solid var(--accent-color);
+    border-left: 3px solid var(--primary-color);
     height: 100%;
 }
 
@@ -494,11 +679,11 @@ body {
     
     .card {
         box-shadow: none;
-        border: 1px solid #ccc;
+        border: 1px solid var(--gnv-smokey-blue);
     }
     
     .bom-table th {
-        background: #f8f9fa !important;
-        color: #000 !important;
+        background: var(--gnv-primary-beige) !important;
+        color: var(--secondary-color) !important;
     }
 }
