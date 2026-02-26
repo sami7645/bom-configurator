@@ -135,14 +135,31 @@ def build_stumpfschweiss_endkappen(config) -> List[Dict]:
         )
 
     if config.schachttyp == "Verteiler":
-        # Dynamic: Find normal version (not short) for Verteiler
-        # Look for caps that are NOT short version (is_short_version=False or None)
-        cap = StumpfschweissEndkappe.objects.filter(
-            is_short_version=False
-        ).first()
+        # Prefer a non-short cap that matches the selected HVB size (e.g. 110mm).
+        # This keeps existing behaviour (2 pieces, non-short) but fixes the
+        # wrong diameter (previously always DA 63 because we just took .first()).
+        cap = (
+            StumpfschweissEndkappe.objects.filter(
+                hvb_durchmesser=hvb_size,
+                is_short_version=False,
+            ).first()
+        )
         if not cap:
-            # Fallback: if no is_short_version field, get first available
-            cap = StumpfschweissEndkappe.objects.first()
+            # Fallback: any cap for this HVB size that is not marked as "kurz/short"
+            cap = (
+                StumpfschweissEndkappe.objects.filter(hvb_durchmesser=hvb_size)
+                .exclude(artikelbezeichnung__icontains="kurz")
+                .exclude(artikelbezeichnung__icontains="short")
+                .first()
+            )
+        if not cap:
+            # Final fallback: keep original behaviour (first non-short, then any)
+            cap = StumpfschweissEndkappe.objects.filter(
+                is_short_version=False
+            ).first()
+            if not cap:
+                cap = StumpfschweissEndkappe.objects.first()
+
         add_cap(cap, 2)
         return items
 
@@ -291,9 +308,9 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
         )
         sondenanzahl = context.get("sondenanzahl", 0) or getattr(config, "sondenanzahl", 0) or 0
 
-        always_indices = []
-        probe_match_indices = []
-        hvb_match_indices = []
+        always_indices: List[int] = []
+        probe_match_indices: List[int] = []
+        hvb_match_indices: List[int] = []
 
         # First pass: classify rows
         for idx, entry in enumerate(dfm_entries):
@@ -338,12 +355,19 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
         for idx in probe_match_indices:
             selected_indices.add(idx)
 
-        # For HVB rows: start searching **below** the first matching probe row.
+        # For HVB rows: start searching **below** the first matching probe row
+        # and include only the FIRST matching HVB row. We do NOT keep searching
+        # once a matching HVB row has been found.
         if probe_match_indices:
             first_probe_index = min(probe_match_indices)
-            for idx in hvb_match_indices:
-                if idx > first_probe_index:
-                    selected_indices.add(idx)
+            hvb_after_probe = [idx for idx in hvb_match_indices if idx > first_probe_index]
+            if hvb_after_probe:
+                selected_indices.add(min(hvb_after_probe))
+
+        # Indices where a row is both a probe match AND an HVB match.
+        # For these rows the quantity should count both contributions
+        # (for example 10 pieces for probe side + 10 pieces for HVB side = 20).
+        both_match_indices = set(probe_match_indices) & set(hvb_match_indices)
 
         # Second pass: compute quantities and build items.
         for idx in sorted(selected_indices):
@@ -375,6 +399,11 @@ def build_plastic_dfm_components(config, context) -> List[Dict]:
 
             if quantity is None or quantity <= 0:
                 continue
+
+            # If this row serves both as probe AND HVB article, double the quantity
+            # so that probe and HVB contributions are both reflected.
+            if idx in both_match_indices:
+                quantity = quantity * Decimal("2")
 
             items.append(
                 {
