@@ -1,4 +1,4 @@
-﻿Durchmesser HVB,Durchmesser WP,Artikelnummer,Artikelbezeichnung,Menge Statisch
+Durchmesser HVB,Durchmesser WP,Artikelnummer,Artikelbezeichnung,Menge Statisch
 63,40,2000627,Stumpfschweiß-Reduktion DA 63 / 40 kurz,2
 63,50,2000629,Stumpfschweiß-Reduktion DA 63 / 50 kurz,2
 75,40,2000631,Stumpfschweiß-Reduktion DA 75 / 40 kurz,2
@@ -15,8 +15,12 @@
 125,75,2000583,Stumpfschweiß-Reduktion DA 125 / 75 kurz,2
 125,90,2000585,Stumpfschweiß-Reduktion DA 125 / 90 kurz,2
 125,110,2000579,Stumpfschweiß-Reduktion DA 125 / 110 kurz,2
+140,75,2002052,Stumpfschweiß-Reduktion DA 140 / 75 kurz,2
 140,90,2000591,Stumpfschweiß-Reduktion DA 140 / 90 kurz,2
+140,110,2000587,Stumpfschweiß-Reduktion DA 140 / 110 kurz,2
 140,125,2000969,Stumpfschweiß-Reduktion DA 140 / 125 kurz,2
+160,90,2000599,Stumpfschweiß-Reduktion DA 160 / 90 kurz,2
+160,125,2000595,Stumpfschweiß-Reduktion DA 160 / 110 kurz,2
 160,110,2000593,Stumpfschweiß-Reduktion DA 160 / 110 kurz,2
 160,140,2000597,Stumpfschweiß-Reduktion DA 160 / 140 kurz,2
 180,90,2000607,Stumpfschweiß-Reduktion DA 180 / 90 kurz,2
@@ -24,6 +28,16 @@
 180,125,2000603,Stumpfschweiß-Reduktion DA 180 / 125 kurz,2
 180,140,2000604,Stumpfschweiß-Reduktion DA 180 / 140 kurz,2
 180,160,2000605,Stumpfschweiß-Reduktion DA 180 / 160 kurz,2
+200,125,2000608,Stumpfschweiß-Reduktion DA 200 / 140 kurz,2
 200,140,2001587,Stumpfschweiß-Reduktion DA 200 / 140 kurz,2
 200,160,2001273,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
+200,180,2000610,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
+225,110,2002054,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
+225,140,2002055,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
+225,160,2001702,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
+225,180,2002056,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
+225,200,2002060,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
+250,160,2001273,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
 250,180,2001606,Stumpfschweiß-Reduktion DA 250 / 180 kurz,2
+250,200,2000616,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2
+250,225,2002058,Stumpfschweiß-Reduktion DA 200 / 160 kurz,2

@@ -52,6 +52,58 @@ $(document).ready(function() {
         loadHVBStuetzeArticles();
         updateWPOptions();
     });
+    $('#wpDiameter').on('change', function() {
+        const wpVal = $(this).val();
+        const $wpPipe = $('#wpPipeLength');
+        const $wpPipeHint = $('#wpPipeLengthHint');
+        if ($wpPipe.length === 0) {
+            return;
+        }
+        if (wpVal) {
+            // If we already have a saved value in configurationData, prefer it;
+            // otherwise default to 1 m whenever a WP diameter is selected.
+            const existing = configurationData.wp_pipe_length;
+            if (existing !== undefined && existing !== null && existing !== '') {
+                $wpPipe.val(existing);
+            } else {
+                $wpPipe.val('1');
+            }
+            $wpPipe.prop('disabled', false);
+            $wpPipe.removeClass('is-invalid').addClass('is-valid');
+            if ($wpPipeHint.length) {
+                $wpPipeHint.text('Rohrlänge für den WP-Anschluss in Metern (Standard: 1 m).');
+            }
+        } else {
+            $wpPipe.val('');
+            $wpPipe.prop('disabled', true);
+            $wpPipe.removeClass('is-valid is-invalid');
+            if ($wpPipeHint.length) {
+                $wpPipeHint.text('Kein WP-Durchmesser ausgewählt.');
+            }
+        }
+    });
+
+    // On initial load, keep WP-Rohr length disabled until a WP-Durchmesser is selected.
+    const initialWpSelectVal = $('#wpDiameter').val();
+    const $initialWpPipe = $('#wpPipeLength');
+    const $initialWpPipeHint = $('#wpPipeLengthHint');
+    if ($initialWpPipe.length) {
+        if (initialWpSelectVal) {
+            $initialWpPipe.val('1');
+            $initialWpPipe.prop('disabled', false);
+            $initialWpPipe.addClass('is-valid');
+            if ($initialWpPipeHint.length) {
+                $initialWpPipeHint.text('Rohrlänge für den WP-Anschluss in Metern (Standard: 1 m).');
+            }
+        } else {
+            $initialWpPipe.val('');
+            $initialWpPipe.prop('disabled', true);
+            $initialWpPipe.removeClass('is-valid is-invalid');
+            if ($initialWpPipeHint.length) {
+                $initialWpPipeHint.text('Kein WP-Durchmesser ausgewählt.');
+            }
+        }
+    }
     $('#dfmCategory').on('change', handleDFMCategoryChange);
     $('#dfmType').on('change', function() {
         // When dfmType changes, just ensure D-Kugelhahn section is hidden if needed
@@ -59,6 +111,10 @@ $(document).ready(function() {
             $('#dfmKugelhahnTypeSection').hide();
         }
     });
+    
+    // Update compatible Kugelhahn options whenever HVB or probe diameter changes
+    $('#hvbSize').on('change', updateKugelhahnOptions);
+    $('#sondenDurchmesser').on('change', updateKugelhahnOptions);
     
     // Length calculation display updates
     const lengthInputs = '#sondenanzahl, #sondenabstand, #zuschlagLinks, #zuschlagRechts, #bauform, #anschlussart';
@@ -195,10 +251,22 @@ function validateStep(step) {
     });
 
     // Additional semantic validation for specific steps.
-    // For step 2, ensure sondenanzahl is within the allowed min/max range.
+    // For step 2, ensure sondenanzahl is within the allowed min/max range
+    // and that WP-Rohr-Länge is set when a WP-Durchmesser is selected.
     if (step === 2) {
         if (!validateSondenanzahl()) {
             isValid = false;
+        }
+
+        const wpVal = $('#wpDiameter').val();
+        const $wpPipe = $('#wpPipeLength');
+        if (wpVal && $wpPipe.length) {
+            const pipeValRaw = $wpPipe.val();
+            if (!pipeValRaw && pipeValRaw !== 0) {
+                // Mark as invalid and block navigation if empty while WP is selected
+                $wpPipe.removeClass('is-valid').addClass('is-invalid');
+                isValid = false;
+            }
         }
     }
     
@@ -219,6 +287,7 @@ const fieldLabels = {
     'bauform': 'Bauform',
     'zuschlag_links': 'Zuschlag Links',
     'zuschlag_rechts': 'Zuschlag Rechts',
+    'wp_pipe_length': 'WP-Rohr-Länge',
     'vorlauf_length_per_probe': 'Vorlauf-Länge pro Sonde',
     'ruecklauf_length_per_probe': 'Rücklauf-Länge pro Sonde',
     'kugelhahn_type': 'Kugelhahn-Typ',
@@ -230,7 +299,7 @@ const fieldLabels = {
 // Step field mapping - which fields belong to which step
 const stepFields = {
     1: ['configuration_name', 'schachttyp', 'hvb_size', 'wp_diameter'],
-    2: ['anschlussart', 'sonden_durchmesser', 'sondenanzahl', 'sondenabstand', 'bauform', 'zuschlag_links', 'zuschlag_rechts', 'vorlauf_length_per_probe', 'ruecklauf_length_per_probe'],
+    2: ['anschlussart', 'sonden_durchmesser', 'sondenanzahl', 'sondenabstand', 'bauform', 'zuschlag_links', 'zuschlag_rechts', 'wp_pipe_length', 'vorlauf_length_per_probe', 'ruecklauf_length_per_probe'],
     3: ['kugelhahn_type', 'dfm_category', 'dfm_type', 'dfm_kugelhahn_type']
 };
 
@@ -238,10 +307,10 @@ function formatFieldValue(fieldName, value) {
     if (!value || value === '') return 'Nicht ausgewählt';
     
     // Format specific fields
-    if (fieldName === 'hvb_size') return `${value}mm`;
-    if (fieldName === 'wp_diameter') return `${value}mm`;
-    if (fieldName === 'sonden_durchmesser') return `${value}mm`;
-    if (fieldName === 'sondenabstand') return `${value}mm`;
+    if (fieldName === 'hvb_size') return `${value} mm`;
+    if (fieldName === 'wp_diameter') return `DA ${value} mm`;
+    if (fieldName === 'sonden_durchmesser') return `${value} mm`;
+    if (fieldName === 'sondenabstand') return `${value} mm`;
     if (fieldName === 'bauform') return value === 'U' ? 'U-Form' : 'I-Form';
     if (fieldName === 'anschlussart') return value === 'einseitig' ? 'Einseitig' : 'Beidseitig';
     if (fieldName === 'dfm_category') return value === 'plastic' ? 'Kunststoff' : value === 'brass' ? 'Messing' : value;
@@ -258,6 +327,7 @@ const fieldIdMap = {
     'hvb_size': 'hvbSize',
     'wp_diameter': 'wpDiameter',
     'wp_diameter': 'wpDiameter',
+    'wp_pipe_length': 'wpPipeLength',
     'anschlussart': 'anschlussart',
     'sonden_durchmesser': 'sondenDurchmesser',
     'sondenanzahl': 'sondenanzahl',
@@ -484,6 +554,33 @@ function nextStep(step) {
                 }
                 updateLengthDisplays();
             }, 1000);
+
+            // Initialize WP-Rohr-Länge default when entering step 2
+            const wpVal = $('#wpDiameter').val();
+            const $wpPipe = $('#wpPipeLength');
+            const $wpPipeHint = $('#wpPipeLengthHint');
+            if ($wpPipe.length) {
+                if (wpVal) {
+                    const existing = configurationData.wp_pipe_length;
+                    if (existing !== undefined && existing !== null && existing !== '') {
+                        $wpPipe.val(existing);
+                    } else {
+                        $wpPipe.val('1');
+                    }
+                    $wpPipe.prop('disabled', false);
+                    $wpPipe.removeClass('is-invalid').addClass('is-valid');
+                    if ($wpPipeHint.length) {
+                        $wpPipeHint.text('Rohrlänge für den WP-Anschluss in Metern (Standard: 1 m).');
+                    }
+                } else {
+                    $wpPipe.val('');
+                    $wpPipe.prop('disabled', true);
+                    $wpPipe.removeClass('is-valid is-invalid');
+                    if ($wpPipeHint.length) {
+                        $wpPipeHint.text('Kein WP-Durchmesser ausgewählt.');
+                    }
+                }
+            }
         }, 300);
     }
     
@@ -495,6 +592,8 @@ function nextStep(step) {
             if (category === 'kugelhahn') {
                 $('#dfmKugelhahnTypeSection').show();
             }
+            // Refresh Kugelhahn compatibility options when entering step 3
+            updateKugelhahnOptions();
         }, 100);
     }
     
@@ -1091,6 +1190,61 @@ function handleDFMCategoryChange() {
     });
 }
 
+function updateKugelhahnOptions() {
+    const hvbSize = $('#hvbSize').val();
+    const probeSize = $('#sondenDurchmesser').val();
+    const $khSelect = $('#kugelhahnType');
+    const $dKhSelect = $('#dfmKugelhahnType');
+
+    if (!$khSelect.length && !$dKhSelect.length) {
+        return;
+    }
+
+    if (!hvbSize || !probeSize) {
+        $khSelect.html('<option value="">Keinen auswählen</option>');
+        $dKhSelect.html('<option value="">Bitte wählen...</option>');
+        return;
+    }
+
+    const csrftoken = $('[name=csrfmiddlewaretoken]').val();
+
+    $.ajax({
+        url: '/api/kugelhahn-options/',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': csrftoken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        data: JSON.stringify({
+            hvb_size: hvbSize,
+            sonden_durchmesser: probeSize
+        }),
+        success: function(response) {
+            const options = response.kugelhahn_options || [];
+
+            // Vorlauf Kugelhahn-Typ
+            let khHtml = '<option value="">Keinen auswählen</option>';
+            options.forEach(function(type) {
+                khHtml += `<option value="${type}">${type}</option>`;
+            });
+            $khSelect.html(khHtml);
+
+            // Rücklauf D-Kugelhahn-Typ
+            let dKhHtml = '<option value="">Bitte wählen...</option>';
+            options.forEach(function(type) {
+                dKhHtml += `<option value="${type}">${type}</option>`;
+            });
+            $dKhSelect.html(dKhHtml);
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading Kugelhahn options:', error, xhr.responseText);
+            $khSelect.html('<option value="">Keinen auswählen</option>');
+            $dKhSelect.html('<option value="">Bitte wählen...</option>');
+        }
+    });
+}
+
 function updateDFMOptions() {
     // This function is kept for backward compatibility but now redirects to handleDFMCategoryChange
     handleDFMCategoryChange();
@@ -1186,7 +1340,7 @@ function updateWPOptions() {
             const options = response.wp_options || [];
             let html = '<option value="">Keinen auswählen</option>';
             options.forEach(function(dia) {
-                html += `<option value="${dia}">${'DA ' + dia}</option>`;
+                html += `<option value="${dia}">DA ${dia} mm</option>`;
             });
             $wpSelect.html(html);
 
@@ -1979,24 +2133,93 @@ function showBOMResult(data) {
             </table>
         </div>
         
-        <div class="text-center mt-4">
-            <a href="/configuration/${data.configuration_id}/" class="btn btn-primary me-2">
-                <i class="fas fa-eye me-2"></i>Konfiguration anzeigen
-            </a>
-            <button type="button" class="btn btn-outline-primary me-2" onclick="printBOM()">
-                <i class="fas fa-print me-2"></i>BOM drucken
-            </button>
-            <a href="/configurator/" class="btn btn-outline-secondary">
-                <i class="fas fa-plus me-2"></i>Neue Konfiguration
-            </a>
+        <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-2">
+            <div>
+                <button type="button" class="btn btn-outline-secondary" onclick="previousStep(4)">
+                    <i class="fas fa-arrow-left me-2"></i>Zurück
+                </button>
+            </div>
+            <div class="text-end">
+                <a href="/configuration/${data.configuration_id}/" class="btn btn-primary me-2">
+                    <i class="fas fa-eye me-2"></i>Konfiguration anzeigen
+                </a>
+                <button type="button" class="btn btn-outline-primary me-2" onclick="exportBOM()">
+                    <i class="fas fa-file-csv me-2"></i>CSV exportieren
+                </button>
+                <a href="/configurator/" class="btn btn-outline-secondary">
+                    <i class="fas fa-plus me-2"></i>Neue Konfiguration
+                </a>
+            </div>
         </div>
     `;
     
     $('#bomResult').html(html);
+    // Store configuration id globally so CSV export button can redirect correctly
+    window.latestConfigurationId = data.configuration_id;
 }
 
-function printBOM() {
-    window.print();
+// CSV-Export: gleiche Logik wie auf der Detailseite (clientseitiger CSV-Download)
+function exportBOM() {
+    const table = document.querySelector('.bom-table table');
+    if (!table) {
+        console.warn('Keine BOM-Tabelle für CSV-Export gefunden.');
+        return;
+    }
+
+    let csv = [];
+
+    // Headerzeile
+    const headers = ['Artikelnummer', 'Menge', 'Artikelbeschreibung'];
+    csv.push(headers.join(';'));
+
+    // Spalten: [Pos. (0), Artikelnummer (1), Artikelbezeichnung (2), Menge (3), Quelle (4)]
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cells = Array.from(row.querySelectorAll('td'));
+        let artikelnummer = '';
+        let menge = '';
+        let artikelbezeichnung = '';
+
+        if (cells.length > 1) {
+            artikelnummer = (cells[1].textContent || '').trim();
+        }
+        if (cells.length > 2) {
+            artikelbezeichnung = (cells[2].textContent || '').trim();
+        }
+        if (cells.length > 3) {
+            // Rohtext aus Mengenspalte (erste Zeile, ohne "berechnet"-Info)
+            menge = (cells[3].textContent || '').trim().split('\n')[0].trim();
+
+            // Zahl normalisieren ('.' oder ',' als Dezimaltrenner)
+            let mengeNumber = parseFloat(
+                menge
+                    .replace(/\s/g, '')
+                    .replace(/[^\d,.-]/g, '')
+                    .replace(/,/g, '.')
+            );
+
+            if (!isNaN(mengeNumber)) {
+                // In deutsches Format mit Komma als Dezimaltrenner umwandeln
+                menge = mengeNumber.toString().replace('.', ',');
+            }
+        }
+
+        const rowValues = [artikelnummer, menge, artikelbezeichnung];
+        csv.push(rowValues.join(';'));
+    });
+
+    const csvContent = csv.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    link.download = `bom_export_${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 // Manual test function for debugging

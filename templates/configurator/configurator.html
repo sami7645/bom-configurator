@@ -76,7 +76,7 @@
                                     <select class="form-select" id="hvbSize" name="hvb_size" required>
                                         <option value="">Bitte wählen...</option>
                                         {% for hvb in hvb_sizes %}
-                                            <option value="{{ hvb.hauptverteilerbalken }}">{{ hvb.hauptverteilerbalken }}mm</option>
+                                            <option value="{{ hvb.hauptverteilerbalken }}">{{ hvb.hauptverteilerbalken }} mm</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -164,6 +164,8 @@
                                         <option value="U">U-Form (beidseitig)</option>
                                     </select>
                                 </div>
+                            </div>
+                            <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Zuschläge</label>
                                     <div class="row">
@@ -176,6 +178,13 @@
                                                    name="zuschlag_rechts" placeholder="Rechts (mm)" value="100">
                                         </div>
                                     </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="wpPipeLength" class="form-label">WP-Rohr-Länge (m, optional)</label>
+                                    <input type="number" step="1" min="0" class="form-control"
+                                           id="wpPipeLength" name="wp_pipe_length"
+                                           placeholder="z.B. 1">
+                                    <div class="form-text" id="wpPipeLengthHint"></div>
                                 </div>
                             </div>
                             
@@ -277,9 +286,6 @@
                                         <label for="kugelhahnType" class="form-label">Kugelhahn-Typ (optional)</label>
                                         <select class="form-select" id="kugelhahnType" name="kugelhahn_type">
                                             <option value="">Keinen auswählen</option>
-                                            {% for kugelhahn in kugelhahn_types %}
-                                                <option value="{{ kugelhahn.kugelhahn }}">{{ kugelhahn.kugelhahn }}</option>
-                                            {% endfor %}
                                         </select>
                                     </div>
                                     <div class="mb-3">
@@ -304,9 +310,6 @@
                                         <label for="dfmKugelhahnType" class="form-label">D-Kugelhahn-Typ</label>
                                         <select class="form-select" id="dfmKugelhahnType" name="dfm_kugelhahn_type">
                                             <option value="">Bitte wählen...</option>
-                                            {% for kugelhahn in kugelhahn_types %}
-                                                <option value="{{ kugelhahn.kugelhahn }}">{{ kugelhahn.kugelhahn }}</option>
-                                            {% endfor %}
                                         </select>
                                     </div>
                                 </div>

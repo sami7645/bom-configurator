@@ -7,7 +7,8 @@ from configurator.models import (
     Schacht, HVB, Sondengroesse, Sondenabstand, SondenDurchmesser, SondenDurchmesserPipe, Kugelhahn, DFM,
     Entlueftung, Sondenverschlusskappe, StumpfschweissEndkappe,
     WPVerschlusskappe, WPA, Verrohrung, Schachtgrenze,
-    Schachtkompatibilitaet, CSVDataSource, GNXChamberArticle, HVBStuetze
+    Schachtkompatibilitaet, CSVDataSource, GNXChamberArticle, HVBStuetze,
+    Sondenbeschriftung,
 )
 
 
@@ -50,6 +51,7 @@ class Command(BaseCommand):
             'Stumpfschweiss-Endkappen.csv': self.import_stumpfschweiss_endkappe,
             'WP-Verschlusskappen.csv': self.import_wp_verschlusskappe,
             'WPA.csv': self.import_wpa,
+            'Sondenbeschriftung.csv': self.import_sondenbeschriftung,
             'Verrohrung.csv': self.import_verrohrung,
             'Schachtgrenze.csv': self.import_schachtgrenze,
             'Schachtkompatibilitaet.csv': self.import_schachtkompatibilitaet,
@@ -110,6 +112,7 @@ class Command(BaseCommand):
                 'Stumpfschweiss-Endkappen.csv': self.import_stumpfschweiss_endkappe,
                 'WP-Verschlusskappen.csv': self.import_wp_verschlusskappe,
                 'WPA.csv': self.import_wpa,
+                'Sondenbeschriftung.csv': self.import_sondenbeschriftung,
                 'Verrohrung.csv': self.import_verrohrung,
                 'Schachtgrenze.csv': self.import_schachtgrenze,
                 'Schachtkompatibilitaet.csv': self.import_schachtkompatibilitaet,
@@ -459,6 +462,27 @@ class Command(BaseCommand):
                     count += 1
         return count
 
+    def import_sondenbeschriftung(self, file_path):
+        """Import Sondenbeschriftung data"""
+        Sondenbeschriftung.objects.all().delete()
+        count = 0
+
+        reader = self.read_csv_file(file_path)
+        for row in reader:
+            row = self.clean_row(row)
+            if any(row.values()):
+                nummer = row.get('Nummer', '') or row.get(list(row.keys())[0], '')
+                if nummer and nummer.strip():
+                    Sondenbeschriftung.objects.create(
+                        nummer=str(nummer).strip(),
+                        artikel=row.get('Artikel', ''),
+                        menge_statisch=self.safe_decimal(row.get('Menge - Statisch')),
+                        menge_formel=row.get('Menge - Statisch') if str(row.get('Menge - Statisch', '')).startswith('=') else '',
+                        schaechte=row.get('Schächte', ''),
+                    )
+                    count += 1
+        return count
+
     def import_wp_verschlusskappe(self, file_path):
         """Import WP-Verschlusskappe data"""
         WPVerschlusskappe.objects.all().delete()
@@ -489,10 +513,13 @@ class Command(BaseCommand):
         for row in reader:
             row = self.clean_row(row)
             if any(row.values()):
-                name = row.get(list(row.keys())[0], '')
-                if name and name.strip():
+                # New structure: Durchmesser HVB, Durchmesser WP, Artikelnummer, Artikelbezeichnung, Menge Statisch
+                hvb_durchmesser = row.get('Durchmesser HVB', '') or row.get(list(row.keys())[0], '')
+                wp_durchmesser = row.get('Durchmesser WP', '')
+                if hvb_durchmesser and str(hvb_durchmesser).strip():
                     WPA.objects.create(
-                        name=name,
+                        name=str(hvb_durchmesser).strip(),
+                        wp_durchmesser=str(wp_durchmesser).strip() if wp_durchmesser is not None else '',
                         artikelnummer=row.get('Artikelnummer', ''),
                         artikelbezeichnung=row.get('Artikelbezeichnung', ''),
                         menge_statisch=self.safe_decimal(row.get('Menge Statisch')),

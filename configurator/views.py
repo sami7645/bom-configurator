@@ -429,10 +429,51 @@ def get_dfm_options(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def get_kugelhahn_options(request):
+    """Return compatible Kugelhahn types for the selected HVB and probe diameter."""
+    from .models import Kugelhahn
+    from .utils import check_compatibility
+
+    try:
+        data = json.loads(request.body)
+        hvb_size = str(data.get('hvb_size', '') or '').strip()
+        probe_size = str(data.get('sonden_durchmesser', '') or '').strip()
+
+        if hvb_size.lower().endswith('mm'):
+            hvb_size = hvb_size[:-2].strip()
+        if probe_size.lower().endswith('mm'):
+            probe_size = probe_size[:-2].strip()
+
+        if not hvb_size or not probe_size:
+            return JsonResponse({'kugelhahn_options': []})
+
+        compatible_types = set()
+        for entry in Kugelhahn.objects.all():
+            kh_type = entry.kugelhahn
+            if not kh_type:
+                continue
+
+            # Apply the same compatibility checks as in build_kugelhahn_components
+            if entry.et_hvb and not check_compatibility(entry.et_hvb, hvb_size, probe_size, 'hvb'):
+                continue
+            if entry.et_sonden and not check_compatibility(entry.et_sonden, hvb_size, probe_size, 'sonden'):
+                continue
+            if entry.kh_hvb and not check_compatibility(entry.kh_hvb, hvb_size, probe_size, 'hvb'):
+                continue
+
+            compatible_types.add(kh_type)
+
+        options = sorted(compatible_types)
+        return JsonResponse({'kugelhahn_options': options})
+    except Exception as e:
+        return JsonResponse({'kugelhahn_options': [], 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def get_wp_options(request):
     """Return available WP diameters for a given HVB size based on WPA.csv data."""
     from .models import WPA
-    import re
 
     try:
         data = json.loads(request.body)
@@ -450,11 +491,8 @@ def get_wp_options(request):
 
         wp_diameters = set()
         for entry in wpa_entries:
-            desc = entry.artikelbezeichnung or ''
-            # Extract WP diameter from pattern "DA <HVB> / <WP> kurz"
-            match = re.search(r'DA\s+\d{2,3}\s*/\s*(\d{2,3})', desc)
-            if match:
-                wp_diameters.add(match.group(1))
+            if entry.wp_durchmesser:
+                wp_diameters.add(str(entry.wp_durchmesser).strip())
 
         # Return sorted list of unique WP diameters (as strings)
         wp_options = sorted(wp_diameters, key=lambda x: int(x))
@@ -829,6 +867,7 @@ def generate_bom(request):
         sondenabstand = data.get('sondenabstand', 0)
         zuschlag_links = data.get('zuschlag_links', 100)
         zuschlag_rechts = data.get('zuschlag_rechts', 100)
+        wp_pipe_length_raw = data.get('wp_pipe_length')
         
         try:
             sondenanzahl = int(sondenanzahl) if sondenanzahl else 0
@@ -890,6 +929,17 @@ def generate_bom(request):
         )
         # Attach WP diameter dynamically for BOM rule processing (not persisted as a model field)
         config.wp_diameter = (data.get('wp_diameter') or '').strip()
+        # Attach WP-Rohr length (in meters) for WP pipe article; default 1 m if WP is selected
+        wp_pipe_length = None
+        if config.wp_diameter:
+            if wp_pipe_length_raw in (None, '', 'null'):
+                wp_pipe_length = Decimal('1')
+            else:
+                try:
+                    wp_pipe_length = Decimal(str(wp_pipe_length_raw))
+                except Exception:
+                    wp_pipe_length = Decimal('1')
+        config.wp_pipe_length = wp_pipe_length
         
         # Calculate context for formulas
         calc_context = config.calculate_quantities()
@@ -1168,6 +1218,7 @@ def generate_bom(request):
         additional_components.extend(bom_rules.build_dfm_kugelhahn_components(config, calc_context))
         additional_components.extend(bom_rules.build_plastic_dfm_components(config, calc_context))
         additional_components.extend(bom_rules.build_sondenverschlusskappen(config, calc_context))
+        additional_components.extend(bom_rules.build_sondenbeschriftung(config, calc_context))
         additional_components.extend(bom_rules.build_stumpfschweiss_endkappen(config))
         additional_components.extend(bom_rules.build_wp_components(config, calc_context))
         additional_components.extend(bom_rules.build_entlueftung_components(config, calc_context))

@@ -13,6 +13,8 @@ from ..models import (
     WPVerschlusskappe,
     WPA,
     SondenDurchmesserPipe,
+    HVB,
+    Sondenbeschriftung,
 )
 from ..utils import calculate_formula, check_compatibility, format_artikelnummer
 
@@ -90,30 +92,58 @@ def build_sondenverschlusskappen(config, context) -> List[Dict]:
                 }
             )
     
-    # ============================================
-    # HVB Sondenverschlusskappe (always 2 pieces)
-    # ============================================
-    hvb_size = str(config.hvb_size or "").strip()
-    if hvb_size.lower().endswith("mm"):
-        hvb_size = hvb_size[:-2].strip()
-    
-    if hvb_size:
-        hvb_cap = Sondenverschlusskappe.objects.filter(
-            sonden_durchmesser__iexact=hvb_size
-        ).first()
-        
-        if hvb_cap:
-            hvb_quantity = 2
-            items.append(
-                {
-                    "artikelnummer": format_artikelnummer(hvb_cap.artikelnummer),
-                    "artikelbezeichnung": hvb_cap.artikelbezeichnung,
-                    "menge": _decimal(str(hvb_quantity)),
-                    "source_table": "Sondenverschlusskappe",
-                    "is_finalized": True,
-                }
-            )
-    
+    return items
+
+
+def build_sondenbeschriftung(config, context) -> List[Dict]:
+    """
+    Build Sondenbeschriftung (probe labelling) articles.
+
+    Rules:
+    - Only for chambers GN 2, GN X1, GN X2, GN X3, GN X4.
+    - For each row in Sondenbeschriftung.csv whose 'Schächte' column contains
+      the selected schachttyp, include the article.
+    - Quantity is driven by the CSV formula (e.g. '=sondenanzahl') or static
+      value; this is effectively always equal to sondenanzahl.
+    """
+    items: List[Dict] = []
+
+    schachttyp = str(config.schachttyp or "").strip()
+    if not schachttyp:
+        return items
+
+    allowed_chambers = {"GN 2", "GN X1", "GN X2", "GN X3", "GN X4"}
+    if schachttyp not in allowed_chambers:
+        return items
+
+    entries = Sondenbeschriftung.objects.all()
+    for entry in entries:
+        # Check chamber compatibility from 'Schächte' column
+        schaechte_raw = entry.schaechte or ""
+        if schaechte_raw:
+            schaechte_list = [s.strip() for s in schaechte_raw.split("|") if s.strip()]
+            if schachttyp not in schaechte_list:
+                continue
+
+        quantity = None
+        if entry.menge_formel:
+            quantity = calculate_formula(entry.menge_formel, context)
+        elif entry.menge_statisch is not None:
+            quantity = entry.menge_statisch
+
+        if quantity is None or quantity <= 0:
+            continue
+
+        items.append(
+            {
+                "artikelnummer": format_artikelnummer(entry.nummer),
+                "artikelbezeichnung": entry.artikel,
+                "menge": _decimal(quantity),
+                "source_table": "Sondenbeschriftung",
+                "is_finalized": True,
+            }
+        )
+
     return items
 
 
@@ -530,25 +560,18 @@ def build_wp_components(config, context) -> List[Dict]:
         return items
 
     # 1) Stumpfschweiß-Reduktion from WPA (reduction DA <HVB> / <WP> kurz)
-    import re
-
-    wpa_entries = WPA.objects.filter(name=hvb_size)
-    for entry in wpa_entries:
-        desc = entry.artikelbezeichnung or ""
-        # Expect pattern like "Stumpfschweiß-Reduktion DA 110 / 50 kurz"
-        match = re.search(r"DA\s+\d{2,3}\s*/\s*(\d{2,3})", desc)
-        if match and match.group(1) == wp_diameter:
-            qty = entry.menge_statisch if entry.menge_statisch is not None else Decimal("2")
-            items.append(
-                {
-                    "artikelnummer": format_artikelnummer(entry.artikelnummer),
-                    "artikelbezeichnung": entry.artikelbezeichnung,
-                    "menge": _decimal(qty),
-                    "source_table": "WPA",
-                    "is_finalized": True,
-                }
-            )
-            break  # Only one WPA reduction per HVB/WP combination
+    wpa_entry = WPA.objects.filter(name=hvb_size, wp_durchmesser=wp_diameter).first()
+    if wpa_entry:
+        qty = wpa_entry.menge_statisch if wpa_entry.menge_statisch is not None else Decimal("2")
+        items.append(
+            {
+                "artikelnummer": format_artikelnummer(wpa_entry.artikelnummer),
+                "artikelbezeichnung": wpa_entry.artikelbezeichnung,
+                "menge": _decimal(qty),
+                "source_table": "WPA",
+                "is_finalized": True,
+            }
+        )
 
     # 2) WP-Verschlusskappe for the selected WP diameter
     cap = WPVerschlusskappe.objects.filter(name=wp_diameter).first()
@@ -563,6 +586,23 @@ def build_wp_components(config, context) -> List[Dict]:
                 "is_finalized": True,
             }
         )
+
+    # 3) WP-Rohr (pipe) for the selected WP diameter, using HVB.csv articles.
+    # We deliberately ignore the HVB "Menge Formel" here and instead use a
+    # configurable length in meters (default 1 m), provided by the UI.
+    wp_pipe_length = getattr(config, "wp_pipe_length", None)
+    if wp_pipe_length is not None and wp_pipe_length > 0:
+        hvb_pipe = HVB.objects.filter(hauptverteilerbalken=wp_diameter).first()
+        if hvb_pipe:
+            items.append(
+                {
+                    "artikelnummer": format_artikelnummer(hvb_pipe.artikelnummer),
+                    "artikelbezeichnung": hvb_pipe.artikelbezeichnung,
+                    "menge": _decimal(wp_pipe_length),
+                    "source_table": "WP-Rohr",
+                    "is_finalized": True,
+                }
+            )
 
     return items
 

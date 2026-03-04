@@ -213,7 +213,8 @@ class WPVerschlusskappe(models.Model):
 
 class WPA(models.Model):
     """Heat pump components from WPA.csv"""
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100)  # Durchmesser HVB
+    wp_durchmesser = models.CharField(max_length=50, blank=True, null=True)  # Durchmesser WP
     artikelnummer = models.CharField(max_length=50)
     artikelbezeichnung = models.CharField(max_length=200)
     menge_statisch = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
@@ -225,6 +226,20 @@ class WPA(models.Model):
     class Meta:
         verbose_name_plural = "WPAs"
 
+
+class Sondenbeschriftung(models.Model):
+    """Labels for probes for specific chambers from Sondenbeschriftung.csv"""
+    nummer = models.CharField(max_length=50)
+    artikel = models.CharField(max_length=200)
+    menge_statisch = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
+    menge_formel = models.CharField(max_length=200, blank=True, null=True)
+    schaechte = models.CharField(max_length=200, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.nummer} - {self.artikel}"
+
+    class Meta:
+        verbose_name_plural = "Sondenbeschriftungen"
 
 class Verrohrung(models.Model):
     """Piping components from Verrohrung.csv"""
