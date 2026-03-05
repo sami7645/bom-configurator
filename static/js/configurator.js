@@ -872,8 +872,15 @@ function updateSondenOptions() {
             }
             
             // Only update dropdown if it exists (we're in step 2)
-            if ($('#sondenDurchmesser').length > 0) {
-                $('#sondenDurchmesser').html(options);
+            const $dropdown = $('#sondenDurchmesser');
+            if ($dropdown.length > 0) {
+                $dropdown.html(options);
+
+                // Restore previously selected value from configurationData (if any)
+                const savedValue = configurationData.sonden_durchmesser;
+                if (savedValue && $dropdown.find(`option[value="${savedValue}"]`).length > 0) {
+                    $dropdown.val(savedValue);
+                }
             } else {
                 console.log('Sonden Durchmesser dropdown not found - skipping update');
             }
@@ -1022,7 +1029,7 @@ function updateSondenabstandOptions() {
                            data-zuschlag-links="${option.zuschlag_links}" 
                            data-zuschlag-rechts="${option.zuschlag_rechts}"
                            ${isStandard ? 'selected' : ''}>
-                           ${option.sondenabstand}mm${hinweis}
+                           ${option.sondenabstand} mm${hinweis}
                            </option>`;
                            
                 // Store the standard option for updating zuschläge
@@ -1710,15 +1717,15 @@ function updateProbeDistanceDisplay() {
         const sondenProSeite = Math.ceil(sondenanzahl / 2);
         const effektiveSonden = Math.max(sondenProSeite - 1, 0);
         totalMm = effektiveSonden * sondenabstand;
-        formula = `${sondenanzahl} Sonden, beidseitig: (je Seite ${sondenProSeite} - 1) × ${sondenabstand}mm = ${totalMm}mm`;
+        formula = `${sondenanzahl} Sonden, beidseitig: (je Seite ${sondenProSeite} - 1) × ${sondenabstand} mm = ${totalMm} mm`;
     } else {
         // Einseitig: (sondenanzahl - 1) × sondenabstand
         totalMm = (sondenanzahl - 1) * sondenabstand;
-        formula = `${sondenanzahl} Sonden, einseitig: (${sondenanzahl} - 1) × ${sondenabstand}mm = ${totalMm}mm`;
+        formula = `${sondenanzahl} Sonden, einseitig: (${sondenanzahl} - 1) × ${sondenabstand} mm = ${totalMm} mm`;
     }
     
     const totalMeters = (totalMm / 1000).toFixed(2);
-    $('#probeDistanceDisplay').text(`${totalMm}mm (${totalMeters}m)`);
+    $('#probeDistanceDisplay').text(`${totalMm} mm (${totalMeters} m)`);
     $('#probeDistanceFormula').text(formula);
 }
 
@@ -1766,11 +1773,11 @@ function showConfigurationSummary() {
     const summaryData = [
         ['Konfigurationsname', configurationData.configuration_name],
         ['Schachttyp', configurationData.schachttyp],
-        ['HVB-Größe', `${configurationData.hvb_size}mm`],
-        ['Sonden-Durchmesser', `${configurationData.sonden_durchmesser}mm`],
+        ['HVB-Größe', `${configurationData.hvb_size} mm`],
+        ['Sonden-Durchmesser', `${configurationData.sonden_durchmesser} mm`],
         ['Bauform', configurationData.bauform === 'U' ? 'U-Form' : 'I-Form'],
         ['Anzahl Sonden', configurationData.sondenanzahl],
-        ['Sondenabstand', `${configurationData.sondenabstand}mm`],
+        ['Sondenabstand', `${configurationData.sondenabstand} mm`],
         ['Anschlussart', configurationData.anschlussart],
         ['Kugelhahn-Typ', configurationData.kugelhahn_type || 'Nicht ausgewählt'],
         ['DFM-Kategorie', configurationData.dfm_category || 'Nicht ausgewählt'],
@@ -1849,6 +1856,15 @@ function showArticleNumberStatus(data) {
         `;
     }
     $('#articleNumberContent').html(html);
+    
+    // When user edits the new article number, clear any previous duplicate-warning state
+    const $newArticleInput = $('#newArticleNumber');
+    if ($newArticleInput.length) {
+        $newArticleInput.on('input change', function () {
+            $(this).removeClass('is-invalid');
+            $(this).next('.invalid-feedback').remove();
+        });
+    }
 }
 
 function generateBOM() {
@@ -1956,20 +1972,46 @@ function generateBOM() {
         error: function(xhr, status, error) {
             BOMConfigurator.hideLoading(generateBtn);
             let errorMessage = 'Fehler beim Generieren der BOM.';
-            if (xhr.responseJSON && xhr.responseJSON.message) {
-                errorMessage = xhr.responseJSON.message;
-            } else if (xhr.responseJSON && xhr.responseJSON.error) {
-                errorMessage = `Fehler: ${xhr.responseJSON.error}`;
+            let errorCode = '';
+            
+            if (xhr.responseJSON) {
+                if (xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                } else if (xhr.responseJSON.error) {
+                    errorMessage = `Fehler: ${xhr.responseJSON.error}`;
+                }
+                errorCode = xhr.responseJSON.error || '';
             } else if (xhr.responseText) {
                 try {
                     const errorData = JSON.parse(xhr.responseText);
                     errorMessage = errorData.message || errorData.error || errorMessage;
+                    errorCode = errorData.error || '';
                 } catch (e) {
                     errorMessage = `Fehler: ${xhr.status} ${xhr.statusText}`;
                 }
             }
+            
             console.error('BOM Generation Error:', xhr.responseJSON || xhr.responseText);
             BOMConfigurator.showAlert(errorMessage, 'danger');
+            
+            // Show inline warning inside the "Neue Konfiguration" card if article number is duplicate
+            if (errorCode === 'Artikelnummer bereits vergeben' || errorMessage.includes('Artikelnummer') ) {
+                const $newArticleInput = $('#newArticleNumber');
+                if ($newArticleInput.length) {
+                    $newArticleInput.addClass('is-invalid');
+                    
+                    // Remove any previous feedback to avoid duplicates
+                    $newArticleInput.next('.invalid-feedback').remove();
+                    
+                    const inlineMessage = xhr.responseJSON && xhr.responseJSON.message
+                        ? xhr.responseJSON.message
+                        : 'Diese Artikelnummer wird bereits verwendet. Bitte wählen Sie eine andere Artikelnummer.';
+                    
+                    $newArticleInput.after(
+                        `<div class="invalid-feedback d-block">${inlineMessage}</div>`
+                    );
+                }
+            }
         }
     });
 }
@@ -2133,23 +2175,19 @@ function showBOMResult(data) {
             </table>
         </div>
         
-        <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-2">
-            <div>
-                <button type="button" class="btn btn-outline-secondary" onclick="previousStep(4)">
-                    <i class="fas fa-arrow-left me-2"></i>Zurück
-                </button>
-            </div>
-            <div class="text-end">
-                <a href="/configuration/${data.configuration_id}/" class="btn btn-primary me-2">
-                    <i class="fas fa-eye me-2"></i>Konfiguration anzeigen
-                </a>
-                <button type="button" class="btn btn-outline-primary me-2" onclick="exportBOM()">
-                    <i class="fas fa-file-csv me-2"></i>CSV exportieren
-                </button>
-                <a href="/configurator/" class="btn btn-outline-secondary">
-                    <i class="fas fa-plus me-2"></i>Neue Konfiguration
-                </a>
-            </div>
+        <div class="d-flex justify-content-end align-items-center mt-4 flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="goBackFromBom()">
+                <i class="fas fa-arrow-left me-2"></i>Zurück
+            </button>
+            <a href="/configuration/${data.configuration_id}/" class="btn btn-primary">
+                <i class="fas fa-eye me-2"></i>Konfiguration anzeigen
+            </a>
+            <button type="button" class="btn btn-outline-primary" onclick="exportBOM()">
+                <i class="fas fa-file-csv me-2"></i>CSV exportieren
+            </button>
+            <a href="/configurator/" class="btn btn-outline-secondary">
+                <i class="fas fa-plus me-2"></i>Neue Konfiguration
+            </a>
         </div>
     `;
     
@@ -2220,6 +2258,43 @@ function exportBOM() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+}
+
+// Go back from BOM output (Step 5) to Step 4.
+// If a temporary configuration was just created, delete it first so that
+// the same article number can be reused for the corrected configuration.
+function goBackFromBom() {
+    const configId = window.latestConfigurationId;
+    
+    if (configId) {
+        $.ajax({
+            url: '/api/delete-configurations/',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ config_ids: [configId] }),
+            complete: function() {
+                // Regardless of success or failure, go back to step 4.
+                window.latestConfigurationId = null;
+                
+                // Clear any old validation state on the article number field
+                const $newArticleInput = $('#newArticleNumber');
+                if ($newArticleInput.length) {
+                    $newArticleInput.removeClass('is-invalid');
+                    $newArticleInput.next('.invalid-feedback').remove();
+                }
+                
+                previousStep(4);
+            }
+        });
+    } else {
+        // Fallback: just go back if we don't know the configuration ID.
+        const $newArticleInput = $('#newArticleNumber');
+        if ($newArticleInput.length) {
+            $newArticleInput.removeClass('is-invalid');
+            $newArticleInput.next('.invalid-feedback').remove();
+        }
+        previousStep(4);
+    }
 }
 
 // Manual test function for debugging

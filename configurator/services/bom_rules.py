@@ -92,6 +92,35 @@ def build_sondenverschlusskappen(config, context) -> List[Dict]:
                 }
             )
     
+    # ============================================
+    # HVB Sondenverschlusskappe (always 2 pieces),
+    # but ONLY if **no** WP-Durchmesser is selected.
+    # If a WP is present, the closure caps are handled
+    # via WP-Verschlusskappen instead.
+    # ============================================
+    wp_diameter = str(getattr(config, "wp_diameter", "") or "").strip()
+    if not wp_diameter:
+        hvb_size = str(config.hvb_size or "").strip()
+        if hvb_size.lower().endswith("mm"):
+            hvb_size = hvb_size[:-2].strip()
+        
+        if hvb_size:
+            hvb_cap = Sondenverschlusskappe.objects.filter(
+                sonden_durchmesser__iexact=hvb_size
+            ).first()
+            
+            if hvb_cap:
+                hvb_quantity = 2
+                items.append(
+                    {
+                        "artikelnummer": format_artikelnummer(hvb_cap.artikelnummer),
+                        "artikelbezeichnung": hvb_cap.artikelbezeichnung,
+                        "menge": _decimal(str(hvb_quantity)),
+                        "source_table": "Sondenverschlusskappe",
+                        "is_finalized": True,
+                    }
+                )
+
     return items
 
 

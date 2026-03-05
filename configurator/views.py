@@ -176,8 +176,8 @@ def get_sonden_durchmesser_options(request):
             key=lambda x: int(x) if x.isdigit() else 9999
         )
         
-        # Format as options
-        options = [{'durchmesser': d, 'label': f'{d}mm'} for d in durchmesser_list]
+        # Format as options (always show a space before 'mm')
+        options = [{'durchmesser': d, 'label': f'{d} mm'} for d in durchmesser_list]
         
         return JsonResponse({
             'sonden_durchmesser_options': options,
@@ -882,9 +882,9 @@ def generate_bom(request):
             })
         
         # Handle article number logic
-        mother_article_number = data.get('mother_article_number', '') or ''
-        child_article_number = data.get('child_article_number', '') or ''
-        full_article_number = data.get('full_article_number', '') or ''
+        mother_article_number = (data.get('mother_article_number', '') or '').strip()
+        child_article_number = (data.get('child_article_number', '') or '').strip()
+        full_article_number = (data.get('full_article_number', '') or '').strip()
         
         # If child_article_number is provided in format "1000089-002", extract mother and child
         if child_article_number and '-' in child_article_number:
@@ -906,6 +906,18 @@ def generate_bom(request):
         # If we have mother and child, construct full_article_number
         if mother_article_number and child_article_number and not full_article_number:
             full_article_number = f"{mother_article_number}-{child_article_number}"
+        
+        # Enforce uniqueness of article numbers across all BOM configurations
+        # Double article numbers cause problems in downstream ERP systems, so we block them here.
+        if full_article_number:
+            # Case-insensitive check to avoid duplicates that differ only by casing/whitespace
+            if BOMConfiguration.objects.filter(full_article_number__iexact=full_article_number).exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Artikelnummer bereits vergeben',
+                    'message': f'Diese Artikelnummer \"{full_article_number}\" wird bereits von einer anderen Konfiguration verwendet. '
+                               'Bitte wählen Sie eine andere Artikelnummer.'
+                }, status=400)
         
         # Create BOM configuration
         config = BOMConfiguration.objects.create(
