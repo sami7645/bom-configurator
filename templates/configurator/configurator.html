@@ -53,6 +53,16 @@
                             <h5><i class="fas fa-layer-group me-2"></i>Schritt 1: Grundkonfiguration</h5>
                         </div>
                         <div class="card-body">
+                            {% if copy_from_config %}
+                            <div class="alert alert-info mb-4">
+                                <i class="fas fa-copy me-2"></i>
+                                Diese Konfiguration basiert auf:
+                                <strong>{{ copy_from_config.name }}</strong>
+                                {% if copy_from_config.full_article_number %}
+                                    (<code>{{ copy_from_config.full_article_number }}</code>)
+                                {% endif %}
+                            </div>
+                            {% endif %}
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label for="configName" class="form-label">Konfigurationsname</label>
@@ -425,5 +435,33 @@
 
 {% block extra_js %}
 {% load static %}
+<script>
+    // Prefill configuration data when copying from an existing configuration
+    {% if copy_from_config %}
+    window.initialConfigurationData = {
+        configuration_name: "{{ copy_from_config.name|escapejs }}",
+        schachttyp: "{{ copy_from_config.schachttyp|escapejs }}",
+        hvb_size: "{{ copy_from_config.hvb_size|escapejs }}",
+        sonden_durchmesser: "{{ copy_from_config.sonden_durchmesser|escapejs }}",
+        sondenanzahl: "{{ copy_from_config.sondenanzahl }}",
+        sondenabstand: "{{ copy_from_config.sondenabstand }}",
+        anschlussart: "{{ copy_from_config.anschlussart|escapejs }}",
+        bauform: "{{ copy_from_config.bauform|escapejs }}",
+        kugelhahn_type: "{{ copy_from_config.kugelhahn_type|default_if_none:''|escapejs }}",
+        dfm_category: "{{ copy_from_config.dfm_category|default_if_none:''|escapejs }}",
+        dfm_type: "{{ copy_from_config.dfm_type|default_if_none:''|escapejs }}",
+        dfm_kugelhahn_type: "{{ copy_from_config.dfm_kugelhahn_type|default_if_none:''|escapejs }}",
+        zuschlag_links: "{{ copy_from_config.zuschlag_links }}",
+        zuschlag_rechts: "{{ copy_from_config.zuschlag_rechts }}",
+        wp_diameter: "{{ copy_from_config.wp_diameter_value|default_if_none:''|escapejs }}",
+        wp_pipe_length: "{{ copy_from_config.wp_pipe_length_value|default_if_none:''|escapejs }}",
+        vorlauf_length_per_probe: "{{ copy_from_config.vorlauf_length_per_probe|default_if_none:''|escapejs }}",
+        ruecklauf_length_per_probe: "{{ copy_from_config.ruecklauf_length_per_probe|default_if_none:''|escapejs }}",
+        hvb_stuetze_quantities: {{ copy_from_hvb_stuetze_json|default:"null"|safe }}
+    };
+    {% else %}
+    window.initialConfigurationData = {};
+    {% endif %}
+</script>
 <script src="{% static 'js/configurator.js' %}?v=2"></script>
 {% endblock %}

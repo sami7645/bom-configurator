@@ -317,6 +317,13 @@ class BOMConfiguration(models.Model):
     zuschlag_links = models.IntegerField(default=100)
     zuschlag_rechts = models.IntegerField(default=100)
     
+    # Optional WP / probe-length / HVB-Stütze parameters (persisted for copy feature)
+    wp_diameter_value = models.CharField(max_length=50, blank=True, null=True)
+    wp_pipe_length_value = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
+    vorlauf_length_per_probe = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
+    ruecklauf_length_per_probe = models.DecimalField(max_digits=10, decimal_places=3, blank=True, null=True)
+    hvb_stuetze_quantities = models.JSONField(blank=True, null=True)
+    
     def __str__(self):
         return f"{self.name} - {self.schachttyp}"
     

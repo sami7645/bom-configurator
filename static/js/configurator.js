@@ -1,7 +1,7 @@
 // BOM Configurator JavaScript
 
 let currentStep = 1;
-let configurationData = {};
+let configurationData = window.initialConfigurationData || {};
 let gnxArticles = [];
 let hvbStuetzeArticles = [];
 
@@ -10,6 +10,11 @@ function isGNXSchachttyp(schachttyp) {
 }
 
 $(document).ready(function() {
+    // Merge copy-from data into configurationData early so all restore logic can use it
+    if (window.initialConfigurationData && Object.keys(window.initialConfigurationData).length > 0) {
+        configurationData = { ...configurationData, ...window.initialConfigurationData };
+    }
+
     // Initialize form validation
     initializeValidation();
     
@@ -215,7 +220,122 @@ $(document).ready(function() {
             });
         }
     }, 500);
+
+    // ---- COPY-FROM: prefill all fields and trigger dependent AJAX chains ----
+    if (window.initialConfigurationData && Object.keys(window.initialConfigurationData).length > 0) {
+        const cd = window.initialConfigurationData;
+
+        // Step 1 direct fields
+        $('#configName').val(cd.configuration_name || '');
+        $('#bauform').val(cd.bauform || 'I');
+        $('#zuschlagLinks').val(cd.zuschlag_links || '100');
+        $('#zuschlagRechts').val(cd.zuschlag_rechts || '100');
+        $('#sondenanzahl').val(cd.sondenanzahl || '');
+
+        // Step 2: optional lengths (mark as manual so DB defaults don't override)
+        if (cd.vorlauf_length_per_probe) {
+            $('#vorlauflengthperprobe').val(cd.vorlauf_length_per_probe);
+            _probeLengthManualVorlauf = true;
+        }
+        if (cd.ruecklauf_length_per_probe) {
+            $('#ruecklauflengthperprobe').val(cd.ruecklauf_length_per_probe);
+            _probeLengthManualRuecklauf = true;
+        }
+
+        // Set schachttyp (triggers HVB filter, GNX check, etc. via change handler)
+        if (cd.schachttyp) {
+            $('#schachttyp').val(cd.schachttyp).trigger('change');
+        }
+
+        // After HVB options are loaded, set hvbSize and its dependants
+        setTimeout(function() {
+            if (cd.hvb_size) {
+                const $hvb = $('#hvbSize');
+                if ($hvb.find(`option[value="${cd.hvb_size}"]`).length > 0) {
+                    $hvb.val(cd.hvb_size);
+                }
+                $hvb.trigger('change');
+            }
+
+            // After WP options load, restore WP diameter
+            setTimeout(function() {
+                if (cd.wp_diameter) {
+                    const $wp = $('#wpDiameter');
+                    if ($wp.find(`option[value="${cd.wp_diameter}"]`).length > 0) {
+                        $wp.val(cd.wp_diameter).trigger('change');
+                    }
+                }
+                // Restore WP pipe length after WP diameter change has settled
+                setTimeout(function() {
+                    if (cd.wp_pipe_length) {
+                        $('#wpPipeLength').val(cd.wp_pipe_length);
+                    }
+                }, 400);
+            }, 600);
+
+            // Restore HVB Stütze custom quantities after they load
+            setTimeout(function() {
+                if (cd.hvb_stuetze_quantities && typeof cd.hvb_stuetze_quantities === 'object') {
+                    Object.entries(cd.hvb_stuetze_quantities).forEach(function([artNr, qty]) {
+                        const $input = $(`#hvb-stuetze-qty-${artNr}`);
+                        if ($input.length) {
+                            $input.val(qty);
+                            configurationData[`hvb_stuetze_${artNr}`] = String(qty);
+                        }
+                    });
+                }
+            }, 1200);
+        }, 600);
+
+        // Step 2: anschlussart triggers sondenabstand loading
+        if (cd.anschlussart) {
+            $('#anschlussart').val(cd.anschlussart).trigger('change');
+        }
+
+        // After sondenabstand AJAX finishes and rebuilds the dropdown (with Standard pre-selected),
+        // force the copied value on top. We use a longer delay to ensure the AJAX callback is done.
+        function forceRestoreSondenabstand() {
+            if (cd.sondenabstand) {
+                const saved = String(cd.sondenabstand);
+                const $sa = $('#sondenabstand');
+                const $saAlt = $('#sondenabstandAlt');
+                if ($sa.find(`option[value="${saved}"]`).length > 0) {
+                    $sa.val(saved);
+                    $sa.removeClass('is-invalid').addClass('is-valid');
+                }
+                if ($saAlt.length && $saAlt.find(`option[value="${saved}"]`).length > 0) {
+                    $saAlt.val(saved);
+                }
+            }
+        }
+        setTimeout(forceRestoreSondenabstand, 1200);
+        setTimeout(forceRestoreSondenabstand, 2000);
+
+        // Step 3: DFM category + type
+        if (cd.dfm_category) {
+            $('#dfmCategory').val(cd.dfm_category);
+            if (cd.dfm_type) {
+                $('#dfmType').data('previous-value', cd.dfm_type);
+            }
+            handleDFMCategoryChange();
+        }
+
+        // Apply is-valid ticks to every prefilled field after all AJAX has settled
+        setTimeout(function() {
+            applyCopyTicks();
+        }, 2500);
+    }
 });
+
+function applyCopyTicks() {
+    $('#bomConfigForm .form-control, #bomConfigForm .form-select').each(function() {
+        const $el = $(this);
+        const val = $el.val();
+        if (val && val !== '') {
+            $el.removeClass('is-invalid').addClass('is-valid');
+        }
+    });
+}
 
 function initializeValidation() {
     // Add validation classes on input
@@ -762,6 +882,11 @@ function updateHvbOptions() {
                 // No restrictions, restore all options
                 console.log('No restrictions - showing all HVB options');
                 $hvbSelect.html(originalHvbOptions);
+                // Restore saved HVB value after repopulating
+                const savedHvb = configurationData.hvb_size;
+                if (savedHvb && $hvbSelect.find(`option[value="${savedHvb}"]`).length > 0) {
+                    $hvbSelect.val(savedHvb);
+                }
             } else {
                 console.log('Filtering HVB options to:', allowedSizes);
                 
@@ -803,8 +928,11 @@ function updateHvbOptions() {
                 
                 $hvbSelect.html(newOptions);
                 
-                // If current selection was allowed, restore it
-                if (currentValue) {
+                // Restore saved HVB value or current selection
+                const savedHvb = configurationData.hvb_size;
+                if (savedHvb && $hvbSelect.find(`option[value="${savedHvb}"]`).length > 0) {
+                    $hvbSelect.val(savedHvb);
+                } else if (currentValue) {
                     const currentSize = currentValue.toString().trim().replace(/mm$/i, '');
                     if (allowedSizes.includes(currentSize)) {
                         $hvbSelect.val(currentValue);
@@ -876,11 +1004,12 @@ function updateSondenOptions() {
             if ($dropdown.length > 0) {
                 $dropdown.html(options);
 
-                // Restore previously selected value from configurationData (if any)
-                const savedValue = configurationData.sonden_durchmesser;
-                if (savedValue && $dropdown.find(`option[value="${savedValue}"]`).length > 0) {
-                    $dropdown.val(savedValue);
-                }
+            // Restore previously selected value from configurationData (if any)
+            const savedValue = configurationData.sonden_durchmesser;
+            if (savedValue && $dropdown.find(`option[value="${savedValue}"]`).length > 0) {
+                $dropdown.val(savedValue);
+                $dropdown.removeClass('is-invalid').addClass('is-valid');
+            }
             } else {
                 console.log('Sonden Durchmesser dropdown not found - skipping update');
             }
@@ -1076,11 +1205,22 @@ function updateSondenabstandOptions() {
                     console.error('ERROR: Alternative dropdown element not found in DOM!');
                 }
                 
-                // If a standard option was found and selected, update the zuschläge fields
-                if (standardOption) {
+                // Restore a previously saved sondenabstand (from copy or back-navigation) if available.
+                // Prefer the value from an initial copied configuration, falling back to configurationData.
+                const savedAbstand = initialCopiedSondenabstand || configurationData.sondenabstand;
+                if (savedAbstand && $('#sondenabstand').find(`option[value="${savedAbstand}"]`).length > 0) {
+                    $('#sondenabstand').val(savedAbstand);
+                    if (altDropdown.length > 0) altDropdown.val(savedAbstand);
+                    if (altDropdownDom) altDropdownDom.value = savedAbstand;
+                    // Don't overwrite zuschlag values when restoring from copy
+                    $('#sondenabstand').trigger('change');
+                    // Lock to prevent later auto-reset to standard
+                    sondenabstandLocked = true;
+                    // Only use initialCopiedSondenabstand once
+                    initialCopiedSondenabstand = null;
+                } else if (standardOption && !sondenabstandLocked) {
                     $('#zuschlagLinks').val(standardOption.zuschlag_links);
                     $('#zuschlagRechts').val(standardOption.zuschlag_rechts);
-                    // Set both dropdowns to the standard option
                     if (altDropdown.length > 0) {
                         altDropdown.val(standardOption.sondenabstand);
                     }
@@ -1237,12 +1377,26 @@ function updateKugelhahnOptions() {
             });
             $khSelect.html(khHtml);
 
+            // Restore previously selected Kugelhahn-Typ if still available
+            const savedKhType = configurationData.kugelhahn_type;
+            if (savedKhType && $khSelect.find(`option[value="${savedKhType}"]`).length > 0) {
+                $khSelect.val(savedKhType);
+                $khSelect.removeClass('is-invalid').addClass('is-valid');
+            }
+
             // Rücklauf D-Kugelhahn-Typ
             let dKhHtml = '<option value="">Bitte wählen...</option>';
             options.forEach(function(type) {
                 dKhHtml += `<option value="${type}">${type}</option>`;
             });
             $dKhSelect.html(dKhHtml);
+
+            // Restore previously selected D-Kugelhahn-Typ if still available
+            const savedDKhType = configurationData.dfm_kugelhahn_type;
+            if (savedDKhType && $dKhSelect.find(`option[value="${savedDKhType}"]`).length > 0) {
+                $dKhSelect.val(savedDKhType);
+                $dKhSelect.removeClass('is-invalid').addClass('is-valid');
+            }
         },
         error: function(xhr, status, error) {
             console.error('Error loading Kugelhahn options:', error, xhr.responseText);
@@ -1350,6 +1504,12 @@ function updateWPOptions() {
                 html += `<option value="${dia}">DA ${dia} mm</option>`;
             });
             $wpSelect.html(html);
+
+            // Restore saved WP diameter if available
+            const savedWp = configurationData.wp_diameter;
+            if (savedWp && $wpSelect.find(`option[value="${savedWp}"]`).length > 0) {
+                $wpSelect.val(savedWp).trigger('change');
+            }
 
             if (options.length === 0) {
                 $hint.text('Für diese HVB-Größe sind keine WP-Durchmesser definiert.');

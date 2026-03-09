@@ -112,6 +112,17 @@ def configurator(request):
         'brass_flowmeters': sorted(brass_flowmeters),
         'plastic_flowmeters': sorted(plastic_flowmeters),
     }
+    
+    # Optional: prefill configuration based on an existing configuration (copy feature)
+    copy_from_id = request.GET.get('copy_from')
+    if copy_from_id:
+        try:
+            source_config = BOMConfiguration.objects.get(id=copy_from_id)
+            context['copy_from_config'] = source_config
+            # Provide JSON-safe HVB Stütze quantities for JS
+            context['copy_from_hvb_stuetze_json'] = json.dumps(source_config.hvb_stuetze_quantities or {})
+        except BOMConfiguration.DoesNotExist:
+            pass
     return render(request, 'configurator/configurator.html', context)
 
 
@@ -919,6 +930,37 @@ def generate_bom(request):
                                'Bitte wählen Sie eine andere Artikelnummer.'
                 }, status=400)
         
+        # Parse optional per-probe lengths
+        vorlauf_raw = data.get('vorlauf_length_per_probe')
+        ruecklauf_raw = data.get('ruecklauf_length_per_probe')
+        vorlauf_val = None
+        ruecklauf_val = None
+        if vorlauf_raw not in (None, '', 'null'):
+            try:
+                vorlauf_val = Decimal(str(vorlauf_raw))
+            except Exception:
+                pass
+        if ruecklauf_raw not in (None, '', 'null'):
+            try:
+                ruecklauf_val = Decimal(str(ruecklauf_raw))
+            except Exception:
+                pass
+
+        # Parse WP diameter and pipe length
+        wp_diameter_str = (data.get('wp_diameter') or '').strip()
+        wp_pipe_length = None
+        if wp_diameter_str:
+            if wp_pipe_length_raw in (None, '', 'null'):
+                wp_pipe_length = Decimal('1')
+            else:
+                try:
+                    wp_pipe_length = Decimal(str(wp_pipe_length_raw))
+                except Exception:
+                    wp_pipe_length = Decimal('1')
+
+        # Parse HVB Stütze custom quantities
+        hvb_stuetze_data = data.get('hvb_stuetze_articles') or None
+
         # Create BOM configuration
         config = BOMConfiguration.objects.create(
             name=data.get('configuration_name', 'Neue Konfiguration'),
@@ -937,20 +979,15 @@ def generate_bom(request):
             child_article_number=child_article_number or None,
             full_article_number=full_article_number or None,
             zuschlag_links=zuschlag_links,
-            zuschlag_rechts=zuschlag_rechts
+            zuschlag_rechts=zuschlag_rechts,
+            wp_diameter_value=wp_diameter_str or None,
+            wp_pipe_length_value=wp_pipe_length,
+            vorlauf_length_per_probe=vorlauf_val,
+            ruecklauf_length_per_probe=ruecklauf_val,
+            hvb_stuetze_quantities=hvb_stuetze_data,
         )
-        # Attach WP diameter dynamically for BOM rule processing (not persisted as a model field)
-        config.wp_diameter = (data.get('wp_diameter') or '').strip()
-        # Attach WP-Rohr length (in meters) for WP pipe article; default 1 m if WP is selected
-        wp_pipe_length = None
-        if config.wp_diameter:
-            if wp_pipe_length_raw in (None, '', 'null'):
-                wp_pipe_length = Decimal('1')
-            else:
-                try:
-                    wp_pipe_length = Decimal(str(wp_pipe_length_raw))
-                except Exception:
-                    wp_pipe_length = Decimal('1')
+        # Attach runtime attributes for BOM rule processing
+        config.wp_diameter = wp_diameter_str
         config.wp_pipe_length = wp_pipe_length
         
         # Calculate context for formulas
@@ -960,7 +997,8 @@ def generate_bom(request):
         
         # Add Schacht item (FINALIZED - correct based on Schachttyp selection)
         schacht = Schacht.objects.filter(schachttyp=config.schachttyp).first()
-        if schacht and schacht.artikelnummer:
+        # Skip placeholder rows without a real article number (e.g. "-" in CSV)
+        if schacht and schacht.artikelnummer and str(schacht.artikelnummer).strip() not in ('', '-'):
             quantity = schacht.menge_statisch or Decimal('1')
             if schacht.menge_formel:
                 calculated = calculate_formula(schacht.menge_formel, calc_context)
@@ -1331,11 +1369,43 @@ def view_configuration(request, config_id):
 
 
 def configuration_list(request):
-    """List all BOM configurations"""
-    configurations = BOMConfiguration.objects.all().order_by('-created_at')
+    """List all BOM configurations with simple filtering"""
+    base_qs = BOMConfiguration.objects.all().order_by('-created_at')
+    total_configurations = base_qs.count()
+    
+    configurations = base_qs
+    
+    # Basic filters from query parameters
+    name_query = request.GET.get('name', '').strip()
+    schachttyp = request.GET.get('schachttyp', '').strip()
+    hvb_size = request.GET.get('hvb_size', '').strip()
+    article_number = request.GET.get('article_number', '').strip()
+    
+    if name_query:
+        configurations = configurations.filter(name__icontains=name_query)
+    if schachttyp:
+        configurations = configurations.filter(schachttyp__iexact=schachttyp)
+    if hvb_size:
+        configurations = configurations.filter(hvb_size=hvb_size)
+    if article_number:
+        configurations = configurations.filter(
+            Q(full_article_number__icontains=article_number)
+            | Q(mother_article_number__icontains=article_number)
+            | Q(child_article_number__icontains=article_number)
+        )
+    
+    filters_active = any([name_query, schachttyp, hvb_size, article_number])
     
     context = {
         'configurations': configurations,
+        'filters': {
+            'name': name_query,
+            'schachttyp': schachttyp,
+            'hvb_size': hvb_size,
+            'article_number': article_number,
+        },
+        'filters_active': filters_active,
+        'total_configurations': total_configurations,
     }
     return render(request, 'configurator/configuration_list.html', context)
 

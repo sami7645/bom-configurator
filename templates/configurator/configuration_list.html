@@ -213,7 +213,7 @@ td:first-child {
     </div>
 
     <!-- Configurations List -->
-    {% if configurations %}
+    {% if total_configurations > 0 or filters_active %}
     <div class="row">
         <div class="col-12">
             <div class="card">
@@ -228,27 +228,70 @@ td:first-child {
                     </div>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th style="width: 60px;">
-                                        <div id="selectAll-wrapper" title="Alle auswählen">
-                                            <input type="checkbox" id="selectAll">
-                                            <span class="custom-checkbox"></span>
-                                        </div>
-                                    </th>
-                                    <th>Name</th>
-                                    <th>Schachttyp</th>
-                                    <th>HVB-Größe</th>
-                                    <th>Sonden</th>
-                                    <th>Artikelnummer</th>
-                                    <th>Status</th>
-                                    <th>Erstellt</th>
-                                    <th>Aktionen</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <form method="get">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width: 60px;">
+                                            <div id="selectAll-wrapper" title="Alle auswählen">
+                                                <input type="checkbox" id="selectAll">
+                                                <span class="custom-checkbox"></span>
+                                            </div>
+                                        </th>
+                                        <th>Name</th>
+                                        <th>Schachttyp</th>
+                                        <th>HVB-Größe</th>
+                                        <th>Sonden</th>
+                                        <th>Artikelnummer</th>
+                                        <th>Status</th>
+                                        <th>Erstellt</th>
+                                        <th>Aktionen</th>
+                                    </tr>
+                                    <!-- Filter row -->
+                                    <tr class="config-filter-row align-middle">
+                                        <th></th>
+                                        <th>
+                                            <input type="text"
+                                                   name="name"
+                                                   class="form-control form-control-sm config-filter-input"
+                                                   placeholder="Name..."
+                                                   value="{{ filters.name|default_if_none:'' }}">
+                                        </th>
+                                        <th>
+                                            <input type="text"
+                                                   name="schachttyp"
+                                                   class="form-control form-control-sm config-filter-input"
+                                                   placeholder="Schachttyp..."
+                                                   value="{{ filters.schachttyp|default_if_none:'' }}">
+                                        </th>
+                                        <th>
+                                            <input type="text"
+                                                   name="hvb_size"
+                                                   class="form-control form-control-sm config-filter-input"
+                                                   placeholder="HVB-Größe..."
+                                                   value="{{ filters.hvb_size|default_if_none:'' }}">
+                                        </th>
+                                        <th></th>
+                                        <th>
+                                            <input type="text"
+                                                   name="article_number"
+                                                   class="form-control form-control-sm config-filter-input"
+                                                   placeholder="Artikelnummer..."
+                                                   value="{{ filters.article_number|default_if_none:'' }}">
+                                        </th>
+                                        <th></th>
+                                        <th></th>
+                                        <th class="text-end pe-3">
+                                            <button type="button"
+                                                    id="clearFiltersBtn"
+                                                    class="btn btn-sm btn-outline-light config-filter-clear-btn">
+                                                Filter löschen
+                                            </button>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                                 {% for config in configurations %}
                                 <tr data-config-id="{{ config.id }}">
                                     <td class="text-center">
@@ -310,6 +353,12 @@ td:first-child {
                                                title="Konfiguration anzeigen">
                                                 <i class="fas fa-eye"></i>
                                             </a>
+                                            <a href="{% url 'configurator' %}?copy_from={{ config.id }}"
+                                               class="btn btn-sm btn-outline-primary"
+                                               data-bs-toggle="tooltip"
+                                               title="Konfiguration kopieren">
+                                                <i class="fas fa-copy"></i>
+                                            </a>
                                             <a href="{% url 'delete_configuration' config.id %}" 
                                                class="btn btn-sm btn-outline-danger" 
                                                data-bs-toggle="tooltip" 
@@ -321,9 +370,10 @@ td:first-child {
                                     </td>
                                 </tr>
                                 {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                                </tbody>
+                            </table>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -393,7 +443,7 @@ td:first-child {
     </div>
 
     {% else %}
-    <!-- Empty State -->
+    <!-- Empty State (only when there is literally no configuration in DB and no filters) -->
     <div class="row">
         <div class="col-12">
             <div class="card text-center">
@@ -458,6 +508,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 actualCheckbox.dispatchEvent(new Event('change'));
             });
         }
+    }
+    // Live filters: type to filter without buttons
+    const filterInputs = document.querySelectorAll('.config-filter-input');
+    if (filterInputs.length > 0) {
+        const form = document.querySelector('form[method="get"]');
+        filterInputs.forEach(input => {
+            // Submit on Enter
+            input.addEventListener('keyup', function(e) {
+                if (e.key === 'Enter' && form) {
+                    form.submit();
+                }
+            });
+            // Also submit on blur (when user leaves the field)
+            input.addEventListener('blur', function() {
+                if (form) {
+                    form.submit();
+                }
+            });
+        });
+    }
+
+    // Clear filters button
+    const clearBtn = document.getElementById('clearFiltersBtn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+            const form = clearBtn.closest('form');
+            if (!form) return;
+            // Clear all filter inputs
+            const inputs = form.querySelectorAll('.config-filter-input');
+            inputs.forEach(i => i.value = '');
+            // Submit empty form to show all configurations
+            form.submit();
+        });
     }
 });
 

@@ -105,6 +105,37 @@ body {
     border-color: var(--success-color);
 }
 
+/* Configuration list filters - compact, modern look */
+.config-filter-row {
+    background-color: transparent;
+}
+
+.config-filter-input {
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 0;
+    background-color: transparent;
+    color: #fff;
+    padding: 0.1rem 0.25rem;
+    font-size: 0.8rem;
+    height: 1.6rem;
+}
+
+.config-filter-input::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.config-filter-input:focus {
+    border-bottom-color: #fff;
+    box-shadow: none;
+}
+
+.config-filter-clear-btn {
+    white-space: nowrap;
+    padding: 0.1rem 0.6rem;
+    font-size: 0.75rem;
+}
+
 /* Button Styles */
 .btn {
     border-radius: 8px;
