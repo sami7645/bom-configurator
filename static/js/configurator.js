@@ -1958,7 +1958,10 @@ function showArticleNumberStatus(data) {
     let statusClass = '';
     let statusText = '';
     
-    if (data.exists) {
+    // When copying a configuration, always let the user enter a new article number
+    const isCopy = !!(window.initialConfigurationData && Object.keys(window.initialConfigurationData).length > 0);
+
+    if (data.exists && !isCopy) {
         if (data.type === 'full_configuration') {
             statusClass = 'status-existing';
             statusText = 'Bestehende Konfiguration';
@@ -1999,18 +2002,33 @@ function showArticleNumberStatus(data) {
         }
     } else {
         statusClass = 'status-new';
-        statusText = 'Neue Konfiguration';
+        statusText = isCopy ? 'Kopie' : 'Neue Konfiguration';
+
+        // When copying, check if the original article had a mother-child pattern (e.g. 1000784-018)
+        let prefillValue = '';
+        let prefillHint = '';
+        if (isCopy) {
+            const origArticle = window.initialConfigurationData.full_article_number || '';
+            const motherChildMatch = origArticle.match(/^(\d{5,})-(\d+)$/);
+            if (motherChildMatch) {
+                prefillValue = motherChildMatch[1] + '-';
+                prefillHint = `Mutterartikel <code>${motherChildMatch[1]}</code> aus Originalkonfiguration. Bitte Kindnummer eingeben.`;
+            }
+        }
+
         html = `
             <div class="article-number-panel">
                 <div class="article-number-panel__header">
-                    <h6><i class="fas fa-plus-circle me-2"></i>Neue Konfiguration</h6>
+                    <h6><i class="fas fa-plus-circle me-2"></i>${statusText}</h6>
                     <span class="status-badge ${statusClass}">${statusText}</span>
                 </div>
                 <p class="mb-3">${data.message}</p>
                 <div class="mb-0">
                     <label class="form-label">Neue Artikelnummer:</label>
                     <input type="text" class="form-control" id="newArticleNumber" 
+                           value="${prefillValue}"
                            placeholder="z.B. 1000089-001" required>
+                    ${prefillHint ? `<small class="form-text text-muted">${prefillHint}</small>` : ''}
                 </div>
             </div>
         `;

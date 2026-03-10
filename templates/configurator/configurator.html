@@ -453,6 +453,7 @@
         dfm_kugelhahn_type: "{{ copy_from_config.dfm_kugelhahn_type|default_if_none:''|escapejs }}",
         zuschlag_links: "{{ copy_from_config.zuschlag_links }}",
         zuschlag_rechts: "{{ copy_from_config.zuschlag_rechts }}",
+        full_article_number: "{{ copy_from_config.full_article_number|default_if_none:''|escapejs }}",
         wp_diameter: "{{ copy_from_config.wp_diameter_value|default_if_none:''|escapejs }}",
         wp_pipe_length: "{{ copy_from_config.wp_pipe_length_value|default_if_none:''|escapejs }}",
         vorlauf_length_per_probe: "{{ copy_from_config.vorlauf_length_per_probe|default_if_none:''|escapejs }}",
