@@ -2370,8 +2370,9 @@ function showBOMResult(data) {
     `;
     
     $('#bomResult').html(html);
-    // Store configuration id globally so CSV export button can redirect correctly
+    // Store configuration id and article number globally so CSV export button can use them
     window.latestConfigurationId = data.configuration_id;
+    window.latestArticleNumber = data.article_number || null;
 }
 
 // CSV-Export: gleiche Logik wie auf der Detailseite (clientseitiger CSV-Download)
@@ -2430,8 +2431,14 @@ function exportBOM() {
 
     const link = document.createElement('a');
     link.href = url;
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    link.download = `bom_export_${timestamp}.csv`;
+    // Prefer the chosen article number for the filename
+    let articleNumber = (window.latestArticleNumber || configurationData.full_article_number || '').trim();
+    if (!articleNumber) {
+        articleNumber = 'ohne_artikelnummer';
+    }
+    // Sanitize for filename (no spaces/slashes)
+    articleNumber = articleNumber.replace(/[^\w\-]+/g, '_');
+    link.download = `${articleNumber}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

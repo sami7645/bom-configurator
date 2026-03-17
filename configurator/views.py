@@ -1295,7 +1295,16 @@ def generate_bom(request):
                     'is_finalized': component.get('is_finalized', False)
                 }
 
-        for component in component_map.values():
+        # Ensure certain component groups always appear at the bottom of the BOM (and exports).
+        # This preserves the relative order within each group.
+        bottom_sources = {
+            "HVB Stütze",
+            "Sondenbeschriftung",
+        }
+        components_in_order = list(component_map.values())
+        components_in_order.sort(key=lambda c: (c.get("source_table") in bottom_sources))
+
+        for component in components_in_order:
             bom_item = BOMItem.objects.create(
                 configuration=config,
                 artikelnummer=format_artikelnummer(component['artikelnummer']),

@@ -339,7 +339,15 @@ function exportBOM() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.setAttribute('href', URL.createObjectURL(blob));
-    link.setAttribute('download', `BOM_{{ configuration.name|slugify }}.csv`);
+    // Prefer full article number for filename; fall back to mother or config name
+    {% if configuration.full_article_number %}
+    const exportName = '{{ configuration.full_article_number }}.csv';
+    {% elif configuration.mother_article_number %}
+    const exportName = '{{ configuration.mother_article_number }}.csv';
+    {% else %}
+    const exportName = '{{ configuration.name|slugify }}.csv';
+    {% endif %}
+    link.setAttribute('download', exportName.replace(/[^\w\-\.]+/g, '_'));
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
