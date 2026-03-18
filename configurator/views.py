@@ -60,6 +60,37 @@ from .utils import parse_allowed_hvb_sizes
 from .utils import format_artikelnummer, calculate_formula, check_compatibility
 
 
+BOM_SOURCE_SORT_PRIORITY = {
+    'Schacht': 0,
+    'HVB': 1,
+    'Sondengroesse': 2,
+    'Sonden-Durchmesser': 2,
+    'WP-Rohr': 98,
+    'Entlüftung': 99,
+}
+BOM_DEFAULT_PRIORITY = 50
+
+
+def _bom_sort_key(source_table, original_index, artikelnummer=None, schachttyp=None):
+    """
+    Return a tuple for stable sorting of BOM items by source_table priority.
+    
+    Special rule for Sondenbeschriftung article 2002024 (Schilder Ø 80 mm Erdwärmesonde):
+    - If Schachttyp == \"Verteiler\": always first position (priority -1).
+    - If a chamber/manhole is selected (any other Schachttyp): always directly
+      after the Schacht article (priority 0.5, between Schacht (0) and HVB (1)).
+    """
+    priority = float(BOM_SOURCE_SORT_PRIORITY.get(source_table, BOM_DEFAULT_PRIORITY))
+
+    if artikelnummer == '2002024' and source_table == 'Sondenbeschriftung':
+        if schachttyp == 'Verteiler':
+            priority = -1.0
+        else:
+            priority = 0.5
+
+    return (priority, original_index)
+
+
 def index(request):
     """Main configurator page"""
     context = {
@@ -1330,6 +1361,43 @@ def generate_bom(request):
                 'is_finalized': is_finalized
             })
         
+        # Sort BOM items: Schacht → (optional) Sondenbeschriftung 2002024 → HVB → Sonden → middle → WP-Rohr/Entlüftung
+        for idx, item in enumerate(bom_data):
+            item['_orig_idx'] = idx
+            item['_sort_key'] = _bom_sort_key(
+                item.get('source', ''),
+                idx,
+                artikelnummer=item.get('artikelnummer'),
+                schachttyp=config.schachttyp,
+            )
+        bom_data.sort(key=lambda item: item['_sort_key'])
+
+        # Ensure Rohr classes and WP-Rohr are always at the end:
+        # - HVB/Sonden* Rohr (\"Rohr - PE 100-RC - ...\" with sources HVB/Sondengroesse/Sonden-Durchmesser)
+        #   are grouped directly before WP-Rohr.
+        # - WP-Rohr is always the last group.
+        rohr_items = []
+        wp_rohr_items = []
+        other_items = []
+        for item in bom_data:
+            source = item.get('source', '')
+            bezeichnung = item.get('artikelbezeichnung', '') or ''
+            if source in ['HVB', 'Sondengroesse', 'Sonden-Durchmesser'] and bezeichnung.startswith('Rohr - PE 100-RC'):
+                rohr_items.append(item)
+            elif source == 'WP-Rohr':
+                wp_rohr_items.append(item)
+            else:
+                other_items.append(item)
+
+        if wp_rohr_items:
+            bom_data = other_items + rohr_items + wp_rohr_items
+        else:
+            bom_data = other_items + rohr_items
+
+        for item in bom_data:
+            item.pop('_orig_idx', None)
+            item.pop('_sort_key', None)
+
         return JsonResponse({
             'success': True,
             'configuration_id': config.id,
@@ -1354,15 +1422,44 @@ def generate_bom(request):
 def view_configuration(request, config_id):
     """View a specific BOM configuration"""
     config = get_object_or_404(BOMConfiguration, id=config_id)
-    # Preserve the original BOM order as generated during configuration.
-    # BOM items are created in the desired sequence, so we simply rely on
-    # the insertion/primary-key order instead of re-sorting by artikelnummer.
-    bom_items = config.items.all().order_by('id')
+    bom_items_qs = list(config.items.all().order_by('id'))
+    # Sort: Schacht → (optional) Sondenbeschriftung 2002024 → HVB → Sonden → middle articles → WP-Rohr/Entlüftung
+    for idx, item in enumerate(bom_items_qs):
+        item._sort_idx = idx
+        item._sort_key = _bom_sort_key(
+            item.source_table,
+            idx,
+            artikelnummer=item.artikelnummer,
+            schachttyp=config.schachttyp,
+        )
+    bom_items_qs.sort(key=lambda item: item._sort_key)
+
+    # Reposition Rohr classes and WP-Rohr at the end (same rules as JSON view):
+    # - HVB/Sonden* Rohr (\"Rohr - PE 100-RC - ...\" with sources HVB/Sondengroesse/Sonden-Durchmesser)
+    #   appear directly before WP-Rohr.
+    # - WP-Rohr is always the last group.
+    rohr_items = []
+    wp_rohr_items = []
+    other_items = []
+    for item in bom_items_qs:
+        source = item.source_table or ''
+        bezeichnung = item.artikelbezeichnung or ''
+        if source in ['HVB', 'Sondengroesse', 'Sonden-Durchmesser'] and bezeichnung.startswith('Rohr - PE 100-RC'):
+            rohr_items.append(item)
+        elif source == 'WP-Rohr':
+            wp_rohr_items.append(item)
+        else:
+            other_items.append(item)
+
+    if wp_rohr_items:
+        bom_items_qs = other_items + rohr_items + wp_rohr_items
+    else:
+        bom_items_qs = other_items + rohr_items
     gnx_configurations = config.gnxchamberconfiguration_set.all()
     
     context = {
         'configuration': config,
-        'bom_items': bom_items,
+        'bom_items': bom_items_qs,
         'gnx_configurations': gnx_configurations,
     }
     return render(request, 'configurator/view_configuration.html', context)

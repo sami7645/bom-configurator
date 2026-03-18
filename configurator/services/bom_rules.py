@@ -129,9 +129,10 @@ def build_sondenbeschriftung(config, context) -> List[Dict]:
     Build Sondenbeschriftung (probe labelling) articles.
 
     Rules:
-    - Only for chambers GN 2, GN X1, GN X2, GN X3, GN X4.
     - For each row in Sondenbeschriftung.csv whose 'Schächte' column contains
-      the selected schachttyp, include the article.
+      the selected schachttyp, include the article. The allowed chambers come
+      exclusively from the CSV data (no hard-coded whitelist), so new chambers
+      can be added via the 'Schächte' column without code changes.
     - Quantity is driven by the CSV formula (e.g. '=sondenanzahl') or static
       value; this is effectively always equal to sondenanzahl.
     """
@@ -139,10 +140,6 @@ def build_sondenbeschriftung(config, context) -> List[Dict]:
 
     schachttyp = str(config.schachttyp or "").strip()
     if not schachttyp:
-        return items
-
-    allowed_chambers = {"GN 2", "GN X1", "GN X2", "GN X3", "GN X4"}
-    if schachttyp not in allowed_chambers:
         return items
 
     entries = Sondenbeschriftung.objects.all()
