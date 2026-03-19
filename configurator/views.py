@@ -1381,12 +1381,14 @@ def generate_bom(request):
             )
         bom_data.sort(key=lambda item: item['_sort_key'])
 
-        # Ensure Rohr classes and WP-Rohr are always at the end:
-        # - HVB/Sonden* Rohr (\"Rohr - PE 100-RC - ...\" with sources HVB/Sondengroesse/Sonden-Durchmesser)
-        #   are grouped directly before WP-Rohr.
+        # Ensure these classes are at the end (block ordering):
+        # - GNX (HVB Stütze / GNXChamberArticle) should be directly before the Rohr block.
+        # - Rohr - PE 100-RC (from HVB/Sonden*) should be directly before WP-Rohr (if present),
+        #   otherwise it is the last block.
         # - WP-Rohr is always the last group.
         rohr_items = []
         wp_rohr_items = []
+        gnx_items = []
         other_items = []
         for item in bom_data:
             source = item.get('source', '')
@@ -1395,13 +1397,15 @@ def generate_bom(request):
                 rohr_items.append(item)
             elif source == 'WP-Rohr':
                 wp_rohr_items.append(item)
+            elif source in ['HVB Stütze', 'GNXChamberArticle']:
+                gnx_items.append(item)
             else:
                 other_items.append(item)
 
         if wp_rohr_items:
-            bom_data = other_items + rohr_items + wp_rohr_items
+            bom_data = other_items + gnx_items + rohr_items + wp_rohr_items
         else:
-            bom_data = other_items + rohr_items
+            bom_data = other_items + gnx_items + rohr_items
 
         for item in bom_data:
             item.pop('_orig_idx', None)
@@ -1443,12 +1447,13 @@ def view_configuration(request, config_id):
         )
     bom_items_qs.sort(key=lambda item: item._sort_key)
 
-    # Reposition Rohr classes and WP-Rohr at the end (same rules as JSON view):
-    # - HVB/Sonden* Rohr (\"Rohr - PE 100-RC - ...\" with sources HVB/Sondengroesse/Sonden-Durchmesser)
-    #   appear directly before WP-Rohr.
+    # Reposition block ordering (same rules as JSON view):
+    # - GNX (HVB Stütze / GNXChamberArticle) should be directly before the Rohr block.
+    # - Rohr - PE 100-RC (from HVB/Sonden*) should be directly before WP-Rohr (if present).
     # - WP-Rohr is always the last group.
     rohr_items = []
     wp_rohr_items = []
+    gnx_items = []
     other_items = []
     for item in bom_items_qs:
         source = item.source_table or ''
@@ -1457,13 +1462,15 @@ def view_configuration(request, config_id):
             rohr_items.append(item)
         elif source == 'WP-Rohr':
             wp_rohr_items.append(item)
+        elif source in ['HVB Stütze', 'GNXChamberArticle']:
+            gnx_items.append(item)
         else:
             other_items.append(item)
 
     if wp_rohr_items:
-        bom_items_qs = other_items + rohr_items + wp_rohr_items
+        bom_items_qs = other_items + gnx_items + rohr_items + wp_rohr_items
     else:
-        bom_items_qs = other_items + rohr_items
+        bom_items_qs = other_items + gnx_items + rohr_items
     gnx_configurations = config.gnxchamberconfiguration_set.all()
     
     context = {
